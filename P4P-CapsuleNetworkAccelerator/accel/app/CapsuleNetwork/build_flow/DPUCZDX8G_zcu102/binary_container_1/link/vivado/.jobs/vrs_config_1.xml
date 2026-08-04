@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-<Runs Version="1" Minor="0">
-	<Run Id="vpl" LaunchDir="/home/beta/P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/build_flow/DPUCZDX8G_zcu102/binary_container_1/link/vivado/vpl" FlowId="VPL_HW" FromStepId="create_project" ToStepId="impl"/>
-</Runs>
-

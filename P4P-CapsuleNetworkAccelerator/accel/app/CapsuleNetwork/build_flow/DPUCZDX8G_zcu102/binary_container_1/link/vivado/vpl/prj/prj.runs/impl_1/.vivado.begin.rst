@@ -1,5 +1,0 @@
-<?xml version="1.0"?>
-<ProcessHandle Version="1" Minor="0">
-    <Process Command="vivado" Owner="beta" Host="beta-HP-ProBook-430-G6" Pid="20529" HostCore="8" HostMemory="8003948">
-    </Process>
-</ProcessHandle>
