@@ -22,14 +22,15 @@ DESTINATION_REGISTER = 0x21
 ZCU102_NOM = 0.85
 NOMINAL_VOLTAGE = ZCU102_NOM
 BUS_LINE = smbus2.SMBus(BUS_NUMBER)
-bus = smbus2.SMBus(4)
-# define the stop event
-stop_event = threading.Event()
+
 # Power calcuulations
 # Power = Voltage * Current
-# efficiency = Power out / Power in
-# PMBus is little endian
 
+# efficiency = Power out / Power in
+
+# PMBus is little ndian
+
+# exit()
 def findDevices():
     bus = smbus2.SMBus(4) # Not sure if we will change 1
     print("Scanning for devices")
@@ -71,6 +72,7 @@ def write_data(bus, device_address, location, data):
         print(f"Error writing to device at address {hex(device_address)}: {e}")
         return False
 
+
 def ping_host(host, count=1, timeout=2):
     try:
         # Ping command depends on platform; this works on Linux/macOS
@@ -100,14 +102,36 @@ def offload(lst):
     dest = "/home/beta/Desktop/Part-4-project/recovered/"
     cmd = f"scp -r {fileLocationLocal} {user}@{ipAddress}:{dest}"
     print(cmd)
+    # check 1
+    # if not os.path.isfile(fileLocationLocal): # if it is not a file
+    #     print(f"The file {fileLocationLocal} does not exist")
+    #     return # reject
 
-
+    # check 2
+    # this one we skip
+    # if usr is None:
+    #     usr = "root" # default
+    # check 3
+    #temp func, will rewrite
     if not ping_host(ipAddress):
         print(f"Ping failed at: {ipAddress}")
         # setup the connection
         return # reject
     # run the command "sudo ip route add 192.168.9.0/24 dev enp1s0" to add the route to the board
     print("Attempting to set up the connection")
+    # try:
+    #     subprocess.run("sudo ip route add 192.168.9.0/24 dev enp1s0", shell=True, check=True)
+    #     print("Connection setup successful, proceeding with upload")
+    # except subprocess.CalledProcessError as e:
+    #     print(f"Failed to set up connection: {e}")
+
+    # check 4
+    # this one we skip
+    print("All checks passed")
+
+    # if all pass, then we can run the scp command
+    # cmd = f"scp {fileLocationLocal} {usr}@{ipAddress}:{dest}"
+    # print(cmd)
 
     try:
         print(f"Executing command: {cmd}")
@@ -137,11 +161,16 @@ def test():
         print("No devices found.")
         exit(1)
 
+
+    # working buses? a, b. 10, 11, 13, 14, 15, 16, 17, 18, 1a, 1b, 1d
+
     # we have at least one device
     print(f"Found {len(device_list)} devices.")
     for device in device_list:
         print(f"Device address: {hex(device)}")
     exit()
+
+bus = smbus2.SMBus(4)
 
 def setVoltage(bus, address, destination, voltageDecimal):
     """
@@ -163,6 +192,39 @@ def setVoltage(bus, address, destination, voltageDecimal):
         print(f"Error writing to device at address {hex(address)}: {e}")
         return False
 
+# setVoltage(smbus2.SMBus(4), 0x13, 0x21, 0.85)  # reset back to normal
+
+# print("Logging data...")
+# count = 1 # only run the script for ~ 10s
+# while count > 0:
+#     def rloop(bus, location):
+#         alt = read_data(bus, 0x13, location)
+#         if alt is not None:
+#             print(f"{location}: {hex(alt)} || {alt}")
+
+#     # attempting to write
+
+#     # write_data(bus, 0x13, 0x21, 0x0800) # down by literally nothing
+
+
+#     # write_data(bus, 0x13, 0x21, 0xd99) # just a little under nominal
+#     print("Done")
+#     for i in range(20):
+#         time.sleep(0.25)
+#         # balt = read_data(bus, 0x13, 0x21)
+#         rloop(bus, 0x21)
+#         # if balt is not None:
+#         #     print(f"{hex(balt)}")
+#     time.sleep(0.25) # wait for 1 second before the next reading
+#     count-=1
+# setVoltage(smbus2.SMBus(4), 0x13, 0x21, 0.85)  # reset back to normal
+# cwd = "."
+# cmd = "./bin/CapsuleNetwork.exe model/partial_caps.xmodel xclbin/four_kernels.xclbin img/MNIST/t10k-images-idx3-ubyte weights/new_digitcaps_weights.txt 100 img/MNIST/t10k-labels-idx1-ubyte"
+# subprocess.run(cmd, shell=True, cwd=cwd)
+
+# define the stop event
+stop_event = threading.Event()
+
 def stop():
     stop_event.set()
 
@@ -183,6 +245,7 @@ def readAll(bus, voltageLocation, currentLocation):
     alt2 = readData(bus, VOLTAGE_RAIL, currentLocation)
     if alt is not None and alt2 is not None:
         print(f"Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {(alt/4096)*(alt2/4096):.2f}W")
+        # print(f"Power: {alt/4096:.2f}V ({alt}) x {alt2/4096:.2f}A ({alt2})= {(alt/4096)*(alt2/4096):.2f}W") # debug
 
 def getReadingsBus(busNumber, safe = True):
     # safe = True means that we are threading and safe = False means we are not
@@ -321,10 +384,21 @@ def main():
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
+                order = [0.85,"X",0.85]
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[0]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[0]=="X" else NOMINAL_VOLTAGE):.2f}V")
                 runCommand(firstcmd, cwd)
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[1]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[1]=="X" else NOMINAL_VOLTAGE):.2f}V")    
                 runCommand(secondcmd, cwd)
+
                 subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
                 subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[2]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[2]=="X" else NOMINAL_VOLTAGE):.2f}V")
                 runCommand(thirdcmd, cwd)
                 # clean up the other files
 
