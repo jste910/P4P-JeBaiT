@@ -10,11 +10,19 @@ import smbus2
 HOME = "/run/media/mmcblk0p1"
 CAPSNET = f"{HOME}/capsnet"
 
+# ZCU102 MAX15301 for PL VCCINT.
 BUS_NUMBER = 4
-VOLTAGE_RAIL = 0x13
-DESTINATION_REGISTER = 0x21
+VCCINT_REGULATOR_ADDRESS = 0x13
+
+# PMBus commands.
+VOUT_MODE = 0x20
+VOUT_COMMAND = 0x21
+READ_VOUT = 0x8B
+READ_IOUT = 0x8C
+
 NOMINAL_VOLTAGE = 0.85
 MIN_SAFE_VOLTAGE = 0.57
+MAX_SAFE_VOLTAGE = 1.00
 SAMPLE_INTERVAL_S = 0.25
 
 stop_event = threading.Event()
@@ -23,39 +31,76 @@ measurement_lock = threading.Lock()
 pmbus_lock = threading.Lock()
 
 latest_power_w = None
+
 energy_j = 0.0
-previous_time_ns = None
+previous_sample_time_ns = None
 previous_power_w = None
 power_samples = 0
 
+measurement_start_ns = None
+measurement_end_ns = None
+
+
+def sign_extend(value, bits):
+    """Sign-extend an integer encoded using the specified number of bits."""
+    sign_bit = 1 << (bits - 1)
+    return (value ^ sign_bit) - sign_bit
+
+
+def decode_linear11(raw_word):
+    """
+    Decode a PMBus LINEAR11 value.
+
+    Bits 15:11 contain a signed 5-bit exponent.
+    Bits 10:0 contain a signed 11-bit mantissa.
+
+    value = mantissa * 2**exponent
+    """
+    exponent = sign_extend((raw_word >> 11) & 0x1F, 5)
+    mantissa = sign_extend(raw_word & 0x07FF, 11)
+    return mantissa * (2.0 ** exponent)
+
+
+def decode_vout(raw_word, exponent=-12):
+    """
+    Decode READ_VOUT for the ZCU102 MAX15301 VCCINT regulator.
+
+    The device uses a fixed VOUT exponent of -12, so:
+        voltage = raw_word / 4096
+    """
+    return raw_word * (2.0 ** exponent)
+
 
 def set_voltage(voltage):
-    if not 0.0 <= voltage <= 1.0:
-        raise ValueError("Voltage must be between 0 and 1 V")
+    if not MIN_SAFE_VOLTAGE <= voltage <= MAX_SAFE_VOLTAGE:
+        raise ValueError(
+            f"Requested voltage {voltage:.3f} V is outside the allowed "
+            f"range {MIN_SAFE_VOLTAGE:.3f} V to {MAX_SAFE_VOLTAGE:.3f} V"
+        )
+
+    raw_command = int(round(voltage * 4096.0))
 
     with pmbus_lock:
         with smbus2.SMBus(BUS_NUMBER) as bus:
             bus.write_word_data(
-                VOLTAGE_RAIL,
-                DESTINATION_REGISTER,
-                int(voltage * 4096),
+                VCCINT_REGULATOR_ADDRESS,
+                VOUT_COMMAND,
+                raw_command,
             )
 
 
-def read_word(bus, command):
+def read_word(bus, device_address, command):
     for attempt in range(3):
         try:
             with pmbus_lock:
-                return bus.read_word_data(
-                    VOLTAGE_RAIL,
-                    command,
-                )
+                return bus.read_word_data(device_address, command)
         except OSError as error:
             if attempt == 2:
                 print(
-                    f"PMBus read failed: "
-                    f"rail=0x{VOLTAGE_RAIL:02x}, "
-                    f"command=0x{command:02x}, "
+                    "PMBus read failed: "
+                    f"bus={BUS_NUMBER}, "
+                    f"device=0x{device_address:02X}, "
+                    f"command=0x{command:02X}, "
                     f"error={error}"
                 )
             time.sleep(0.02)
@@ -63,17 +108,103 @@ def read_word(bus, command):
     return None
 
 
+def validate_pmbus_device():
+    """
+    Perform a small startup check before running measurements.
+
+    This does not prove that the bus routing is correct, but it helps detect
+    obvious communication and decoding problems.
+    """
+    with smbus2.SMBus(BUS_NUMBER) as bus:
+        raw_mode = None
+        try:
+            with pmbus_lock:
+                raw_mode = bus.read_byte_data(
+                    VCCINT_REGULATOR_ADDRESS,
+                    VOUT_MODE,
+                )
+        except OSError:
+            pass
+
+        raw_voltage = read_word(
+            bus,
+            VCCINT_REGULATOR_ADDRESS,
+            READ_VOUT,
+        )
+        raw_current = read_word(
+            bus,
+            VCCINT_REGULATOR_ADDRESS,
+            READ_IOUT,
+        )
+
+    if raw_voltage is None or raw_current is None:
+        raise RuntimeError(
+            "Unable to read VCCINT telemetry from the MAX15301 at "
+            f"bus {BUS_NUMBER}, address 0x{VCCINT_REGULATOR_ADDRESS:02X}"
+        )
+
+    voltage = decode_vout(raw_voltage)
+    current = decode_linear11(raw_current)
+    power = voltage * current
+
+    print("\nPMBus startup check")
+    print(f"Bus: /dev/i2c-{BUS_NUMBER}")
+    print(
+        f"Device address: 0x{VCCINT_REGULATOR_ADDRESS:02X} "
+        "(expected ZCU102 PL VCCINT regulator)"
+    )
+
+    if raw_mode is not None:
+        print(f"VOUT_MODE raw: 0x{raw_mode:02X}")
+
+    print(f"READ_VOUT raw: 0x{raw_voltage:04X}")
+    print(f"READ_IOUT raw: 0x{raw_current:04X}")
+    print(f"Decoded voltage: {voltage:.6f} V")
+    print(f"Decoded current: {current:.6f} A")
+    print(f"Calculated power: {power:.6f} W")
+
+    if not 0.4 <= voltage <= 1.1:
+        raise RuntimeError(
+            f"Decoded VCCINT voltage {voltage:.6f} V is implausible. "
+            "Check the I2C bus, PMBus device address, and VOUT format."
+        )
+
+    if current < 0.0 or current > 100.0:
+        raise RuntimeError(
+            f"Decoded VCCINT current {current:.6f} A is implausible. "
+            "Check the I2C bus, device address, and LINEAR11 decoding."
+        )
+
+
+def reset_measurement_state():
+    global energy_j
+    global previous_sample_time_ns
+    global previous_power_w
+    global power_samples
+    global measurement_start_ns
+    global measurement_end_ns
+
+    energy_j = 0.0
+    previous_sample_time_ns = None
+    previous_power_w = None
+    power_samples = 0
+    measurement_start_ns = None
+    measurement_end_ns = None
+
+
 def monitor_power(power_log):
     global latest_power_w
     global energy_j
-    global previous_time_ns
+    global previous_sample_time_ns
     global previous_power_w
     global power_samples
 
     new_file = not os.path.exists(power_log)
 
     with smbus2.SMBus(BUS_NUMBER) as bus, open(
-        power_log, "a", newline=""
+        power_log,
+        "a",
+        newline="",
     ) as file:
         writer = csv.writer(file)
 
@@ -81,6 +212,9 @@ def monitor_power(power_log):
             writer.writerow(
                 [
                     "timestamp",
+                    "monotonic_time_ns",
+                    "raw_voltage_hex",
+                    "raw_current_hex",
                     "voltage_V",
                     "current_A",
                     "power_W",
@@ -89,12 +223,20 @@ def monitor_power(power_log):
             )
 
         while not stop_event.is_set():
-            raw_voltage = read_word(bus, 0x8B)
-            raw_current = read_word(bus, 0x8C)
+            raw_voltage = read_word(
+                bus,
+                VCCINT_REGULATOR_ADDRESS,
+                READ_VOUT,
+            )
+            raw_current = read_word(
+                bus,
+                VCCINT_REGULATOR_ADDRESS,
+                READ_IOUT,
+            )
 
             if raw_voltage is not None and raw_current is not None:
-                voltage = raw_voltage / 4096.0
-                current = raw_current / 4096.0
+                voltage = decode_vout(raw_voltage)
+                current = decode_linear11(raw_current)
                 power = voltage * current
                 now_ns = time.monotonic_ns()
 
@@ -103,21 +245,28 @@ def monitor_power(power_log):
                 if measurement_active.is_set():
                     with measurement_lock:
                         if (
-                            previous_time_ns is not None
+                            previous_sample_time_ns is not None
                             and previous_power_w is not None
                         ):
-                            dt_s = (now_ns - previous_time_ns) / 1e9
-                            energy_j += (
-                                previous_power_w + power
-                            ) * 0.5 * dt_s
+                            dt_s = (
+                                now_ns - previous_sample_time_ns
+                            ) / 1e9
 
-                        previous_time_ns = now_ns
+                            if dt_s >= 0.0:
+                                energy_j += (
+                                    previous_power_w + power
+                                ) * 0.5 * dt_s
+
+                        previous_sample_time_ns = now_ns
                         previous_power_w = power
                         power_samples += 1
 
                 writer.writerow(
                     [
                         datetime.now().isoformat(),
+                        now_ns,
+                        f"0x{raw_voltage:04X}",
+                        f"0x{raw_current:04X}",
                         f"{voltage:.6f}",
                         f"{current:.6f}",
                         f"{power:.6f}",
@@ -131,9 +280,11 @@ def monitor_power(power_log):
 
 def run_command(command, log_file):
     global energy_j
-    global previous_time_ns
+    global previous_sample_time_ns
     global previous_power_w
     global power_samples
+    global measurement_start_ns
+    global measurement_end_ns
 
     process = subprocess.Popen(
         command,
@@ -147,14 +298,20 @@ def run_command(command, log_file):
     result = {
         "measurement_type": "ACTIVE_INFERENCE",
         "runs": 0,
-        "measurement_window_ms": 0.0,
+        "reported_measurement_window_ms": 0.0,
         "active_window_ms": 0.0,
         "idle_window_ms": 0.0,
         "latency_ms": 0.0,
+        "python_measurement_window_ms": 0.0,
         "energy_j": 0.0,
         "power_samples": 0,
     }
+
     output = []
+
+    if process.stdout is None:
+        process.kill()
+        raise RuntimeError("Failed to capture child-process output")
 
     for line in process.stdout:
         output.append(line)
@@ -162,10 +319,11 @@ def run_command(command, log_file):
 
         if text == "MEASUREMENT_START":
             with measurement_lock:
-                energy_j = 0.0
-                previous_time_ns = time.monotonic_ns()
+                reset_measurement_state()
+                measurement_start_ns = time.monotonic_ns()
+                previous_sample_time_ns = measurement_start_ns
                 previous_power_w = latest_power_w
-                power_samples = 0
+
             measurement_active.set()
 
         elif text == "MEASUREMENT_END":
@@ -173,16 +331,26 @@ def run_command(command, log_file):
             measurement_active.clear()
 
             with measurement_lock:
+                measurement_end_ns = end_ns
+
                 if (
-                    previous_time_ns is not None
+                    previous_sample_time_ns is not None
                     and previous_power_w is not None
                 ):
-                    energy_j += previous_power_w * (
-                        end_ns - previous_time_ns
+                    tail_dt_s = (
+                        end_ns - previous_sample_time_ns
                     ) / 1e9
+
+                    if tail_dt_s >= 0.0:
+                        energy_j += previous_power_w * tail_dt_s
 
                 result["energy_j"] = energy_j
                 result["power_samples"] = power_samples
+
+                if measurement_start_ns is not None:
+                    result["python_measurement_window_ms"] = (
+                        end_ns - measurement_start_ns
+                    ) / 1e6
 
         elif text.startswith("MEASUREMENT_TYPE="):
             result["measurement_type"] = text.split("=", 1)[1]
@@ -193,17 +361,15 @@ def run_command(command, log_file):
         elif text.startswith("ACTIVE_WINDOW_MS="):
             value = float(text.split("=", 1)[1])
             result["active_window_ms"] = value
-            result["measurement_window_ms"] = value
+            result["reported_measurement_window_ms"] = value
 
         elif text.startswith("IDLE_WINDOW_MS="):
             value = float(text.split("=", 1)[1])
             result["idle_window_ms"] = value
-            result["measurement_window_ms"] = value
+            result["reported_measurement_window_ms"] = value
 
         elif text.startswith("LATENCY_PER_INFERENCE_MS="):
-            result["latency_ms"] = float(
-                text.split("=", 1)[1]
-            )
+            result["latency_ms"] = float(text.split("=", 1)[1])
 
     process.wait()
     measurement_active.clear()
@@ -217,6 +383,12 @@ def run_command(command, log_file):
         raise RuntimeError(
             f"Inference failed with code {process.returncode}. "
             f"See {log_file}"
+        )
+
+    if measurement_start_ns is None or measurement_end_ns is None:
+        raise RuntimeError(
+            "The executable did not emit both MEASUREMENT_START and "
+            "MEASUREMENT_END markers."
         )
 
     return result
@@ -239,17 +411,17 @@ def build_command(model, images, repetitions, output_dir):
     intermediate = f"{CAPSNET}/intermediate_results"
 
     commands = {
-	"1": [
-		f"{CAPSNET}/bin/capsnet_full.exe",
-		f"{CAPSNET}/model/partial_caps.xmodel",
-		xclbin,
-		mnist,
-		weights,
-		str(images),
-		labels,
-		str(repetitions),
-		output_dir,
-	],
+        "1": [
+            f"{CAPSNET}/bin/capsnet_full.exe",
+            f"{CAPSNET}/model/partial_caps.xmodel",
+            xclbin,
+            mnist,
+            weights,
+            str(images),
+            labels,
+            str(repetitions),
+            output_dir,
+        ],
         "2": [
             f"{CAPSNET}/bin/conv1.exe",
             f"{CAPSNET}/model/conv1.xmodel",
@@ -328,12 +500,13 @@ def undervolting_loop(
             [
                 "step",
                 "model",
-                "voltage_V",
+                "commanded_voltage_V",
                 "measurement_type",
                 "runs",
                 "power_samples",
                 "average_power_W",
-                "measurement_window_ms",
+                "python_measurement_window_ms",
+                "reported_measurement_window_ms",
                 "active_window_ms",
                 "idle_window_ms",
                 "latency_per_inference_ms",
@@ -346,7 +519,9 @@ def undervolting_loop(
             voltage = NOMINAL_VOLTAGE - index * step
 
             if voltage < MIN_SAFE_VOLTAGE:
-                print(f"Stopped before unsafe voltage {voltage:.2f} V")
+                print(
+                    f"Stopped before unsafe voltage {voltage:.2f} V"
+                )
                 break
 
             print(f"\nVoltage: {voltage:.2f} V")
@@ -361,10 +536,7 @@ def undervolting_loop(
                     "layer_outputs",
                     f"{voltage:.2f}V",
                 )
-                os.makedirs(
-                    voltage_output_dir,
-                    exist_ok=True,
-                )
+                os.makedirs(voltage_output_dir, exist_ok=True)
 
             command = build_command(
                 model,
@@ -381,19 +553,21 @@ def undervolting_loop(
                 f"{index:02d}_{voltage:.2f}V.txt",
             )
 
+            # Use the Python-side interval because it matches the same
+            # timestamps used for energy integration.
             duration_s = (
-                result["measurement_window_ms"] / 1000.0
+                result["python_measurement_window_ms"] / 1000.0
             )
 
             average_power = (
                 result["energy_j"] / duration_s
-                if duration_s
+                if duration_s > 0.0
                 else 0.0
             )
 
             energy_per_inference = (
                 result["energy_j"] / result["runs"] * 1000.0
-                if result["runs"]
+                if result["runs"] > 0
                 else 0.0
             )
 
@@ -406,7 +580,8 @@ def undervolting_loop(
                     result["runs"],
                     result["power_samples"],
                     f"{average_power:.6f}",
-                    f"{result['measurement_window_ms']:.6f}",
+                    f"{result['python_measurement_window_ms']:.6f}",
+                    f"{result['reported_measurement_window_ms']:.6f}",
                     f"{result['active_window_ms']:.6f}",
                     f"{result['idle_window_ms']:.6f}",
                     f"{result['latency_ms']:.6f}",
@@ -417,46 +592,48 @@ def undervolting_loop(
             file.flush()
 
             print(
-                "MEASUREMENT_TYPE="
-                f"{result['measurement_type']}"
+                f"MEASUREMENT_TYPE={result['measurement_type']}"
             )
             print(f"POWER_SAMPLES={result['power_samples']}")
+            print(
+                "PYTHON_MEASUREMENT_WINDOW_MS="
+                f"{result['python_measurement_window_ms']:.6f}"
+            )
+            print(
+                "REPORTED_MEASUREMENT_WINDOW_MS="
+                f"{result['reported_measurement_window_ms']:.6f}"
+            )
 
             if result["measurement_type"] == "CONFIGURED_IDLE":
                 print(
-                    "AVERAGE_IDLE_POWER_W="
-                    f"{average_power:.6f}"
+                    f"AVERAGE_IDLE_POWER_W={average_power:.6f}"
                 )
                 print(
-                    "IDLE_WINDOW_MS="
-                    f"{result['idle_window_ms']:.6f}"
+                    f"IDLE_WINDOW_MS={result['idle_window_ms']:.6f}"
                 )
                 print(
-                    "IDLE_WINDOW_ENERGY_J="
-                    f"{result['energy_j']:.6f}"
+                    f"IDLE_WINDOW_ENERGY_J={result['energy_j']:.6f}"
                 )
             else:
                 print(f"RUNS={result['runs']}")
                 print(
-                    "AVERAGE_ACTIVE_POWER_W="
-                    f"{average_power:.6f}"
+                    f"AVERAGE_ACTIVE_POWER_W={average_power:.6f}"
                 )
                 print(
-                    "ACTIVE_WINDOW_MS="
-                    f"{result['active_window_ms']:.6f}"
+                    f"ACTIVE_WINDOW_MS={result['active_window_ms']:.6f}"
                 )
                 print(
                     "LATENCY_PER_INFERENCE_MS="
                     f"{result['latency_ms']:.6f}"
                 )
                 print(
-                    "TOTAL_ENERGY_J="
-                    f"{result['energy_j']:.6f}"
+                    f"TOTAL_ENERGY_J={result['energy_j']:.6f}"
                 )
                 print(
                     "ENERGY_PER_INFERENCE_mJ="
                     f"{energy_per_inference:.6f}"
                 )
+
 
 def main():
     models = {
@@ -468,6 +645,7 @@ def main():
         "6": "Length",
         "7": "Configured Idle",
     }
+
     default_repetitions = {
         "1": 1,
         "2": 100,
@@ -483,6 +661,7 @@ def main():
         raise ValueError("Invalid model selection")
 
     images = int(input("Number of images [default 50]: ") or 50)
+
     if model == "7":
         repetitions = 1
         print(
@@ -497,8 +676,13 @@ def main():
             )
             or default_repetitions[model]
         )
-    iterations = int(input("Voltage levels [default 28]: ") or 28)
-    step = float(input("Voltage step [default 0.01]: ") or 0.01)
+
+    iterations = int(
+        input("Voltage levels [default 28]: ") or 28
+    )
+    step = float(
+        input("Voltage step [default 0.01]: ") or 0.01
+    )
 
     model_tag = {
         "1": "full_capsnet",
@@ -522,15 +706,20 @@ def main():
             f"{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         ),
     )
-    
+
     os.makedirs(results_dir, exist_ok=True)
-    
+
     print(f"\nModel: {models[model]}")
     print(f"Images: {images}")
     print(f"Repetitions: {repetitions}")
     print(f"Results: {results_dir}")
 
+    stop_event.clear()
+    measurement_active.clear()
+
+    validate_pmbus_device()
     set_voltage(NOMINAL_VOLTAGE)
+    time.sleep(0.5)
 
     monitor = threading.Thread(
         target=monitor_power,
@@ -554,8 +743,19 @@ def main():
     finally:
         measurement_active.clear()
         stop_event.set()
-        set_voltage(NOMINAL_VOLTAGE)
-        monitor.join(timeout=1)
+
+        try:
+            set_voltage(NOMINAL_VOLTAGE)
+            print(
+                f"VCCINT restored to {NOMINAL_VOLTAGE:.2f} V"
+            )
+        except Exception as error:
+            print(
+                "WARNING: failed to restore nominal VCCINT: "
+                f"{error}"
+            )
+
+        monitor.join(timeout=2.0)
 
     print("Finished")
 
