@@ -384,10 +384,21 @@ def main():
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
+                order = [0.85,"X",0.85]
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[0]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[0]=="X" else NOMINAL_VOLTAGE):.2f}V")
                 runCommand(firstcmd, cwd)
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[1]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[1]=="X" else NOMINAL_VOLTAGE):.2f}V")    
                 runCommand(secondcmd, cwd)
+
                 subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
                 subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+
+                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[2]=="X" else NOMINAL_VOLTAGE))
+                print(f"Voltage set to: {(volt if order[2]=="X" else NOMINAL_VOLTAGE):.2f}V")
                 runCommand(thirdcmd, cwd)
                 # clean up the other files
 
