@@ -12,8 +12,8 @@ def hash_file(filepath): # GPT function, used to check that the file is the same
     return sha256_hash.hexdigest()
 
 # Example usage
-file_path = "PMBus.py"
-print(f"SHA-256: {hash_file(file_path)}")
+# file_path = "PMBus.py"
+# print(f"SHA-256: {hash_file(file_path)}")
 
 def upload_to_board(lst):
     # All lists follow the form (repeat)
