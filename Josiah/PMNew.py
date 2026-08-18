@@ -289,12 +289,12 @@ def main():
             # exit()
 
             volt = NOMINAL_VOLTAGE
-            for _ in range(ITER):
+            for _ in range(1):
                 print("==============================")
                 print(f"Voltage: {volt:.2f}")
                 print("==============================")
                 setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-                imageNum = 100
+                imageNum = 10
                 images = f"{imageNum}"
                 exePath = "./layer_executables/conv1_caps_layer.exe"
                 modelPath = "model/conv1.xmodel"
@@ -321,7 +321,10 @@ def main():
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
                 subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
-                order = ["X", 0.85, 0.85]
+                order = [0.85, 0.85, 0.85]
+
+                subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
+                subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
 
                 setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[0]=="X" else NOMINAL_VOLTAGE))
                 print(f'Voltage set to: {(volt if order[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
@@ -339,7 +342,7 @@ def main():
                 runCommand(thirdcmd, cwd)
                 # clean up the other files
 
-                offload(f"v_{volt:.2f}") # offload the files to the board
+                # offload(f"v_{volt:.2f}") # offload the files to the board
                 subprocess.run(f"rm -rf /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
                 subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
                 subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
