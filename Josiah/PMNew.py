@@ -1,10 +1,12 @@
 
 #imports
+import glob
 import os
 import time
 import smbus2
 import subprocess
 import threading
+from datetime import datetime
 import pexpect
 # defines
 # Input output readings, these need to be confirmed
@@ -29,6 +31,77 @@ BUS_LINE = smbus2.SMBus(BUS_NUMBER)
 # efficiency = Power out / Power in
 
 # PMBus is little ndian
+
+RAILS = [{
+    "name": "VCCINT",
+    "address": 0x13,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+
+},
+{
+    "name": "VCCBRAM",
+    "address": 0x14,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+
+}, {
+    "name": "VCCAUX",
+    "address": 0x15,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+}, {
+    "name": "VCC1V2",
+    "address": 0x16,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+
+}, {
+    "name": "VCC3V3",
+    "address": 0x17,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+
+}, {
+    "name": "VCCDJ_FMC",
+    "address": 0x18,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+},
+{
+    "name": "VCCPSINTFP",
+    "address": 0x0A,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+}, {
+    "name": "VCCPSINTLP",
+    "address": 0x0B,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+    
+}, {
+    "name": "DDR4_DIMM_VDDQ",
+    "address": 0x1D,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+}, {
+    "name": "VCCOPS",
+    "address": 0x10,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+}, {
+    "name": "UTIL3V3",
+    "address": 0x1A,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+
+}, {
+    "name": "UTIL5V0",
+    "address": 0x1B,
+    "vout_exponent": -12,
+    "tags": "MAXIM_PMBUS"
+},
+]
 
 # exit()
 def findDevices():
@@ -71,6 +144,93 @@ def write_data(bus, device_address, location, data):
     except OSError as e:
         print(f"Error writing to device at address {hex(device_address)}: {e}")
         return False
+
+def sign_extend(value, bits):
+    """Sign-extend an integer encoded using the specified number of bits."""
+    sign_bit = 1 << (bits - 1)
+    return (value ^ sign_bit) - sign_bit
+
+def decodeVoltage(raw_value, exponent = -12):
+    return raw_value * (2.0 ** exponent)
+
+def decodeCurrent(raw_word):
+    """
+    Decode a PMBus LINEAR11 value.
+
+    Bits 15:11 contain a signed 5-bit exponent.
+    Bits 10:0 contain a signed 11-bit mantissa.
+
+    value = mantissa * 2**exponent
+    """
+    exponent = sign_extend((raw_word >> 11) & 0x1F, 5)
+    mantissa = sign_extend(raw_word & 0x07FF, 11)
+    return mantissa * (2.0 ** exponent)
+
+lookup = {
+        "ina226_u15" : "VCCOPS3",
+        "ina226_u92" : "VCCPSDDRPLL",
+        "ina226_u79" : "VCCINT",
+        "ina226_u81" : "VCCBRAM",
+        "ina226_u80" : "VCCAUX",
+        "ina226_u84" : "VCC1V2",
+        "ina226_u16" : "VCC3V3",
+        "ina226_u65" : "CADJ_FMC",
+        "ina226_u74" : "MGTAVCC",
+        "ina226_u75" : "MGTAVTT",
+        "ina226_u76" : "VCCPSINTFP",
+        "ina226_u77" : "VCCPSINTLP",
+        "ina226_u78" : "VCCPSAUX",
+        "ina226_u87" : "VCCPSPLL",
+        "ina226_u85" : "MGTRAVCC",
+        "ina226_u86" : "MGTRAVTT",
+        "ina226_u93" : "VCCO_PSDDR_504",
+        "ina226_u88" : "VCCOPS",
+        "max20751" : "VCC or VTT"
+    }
+
+def read_file(path):
+    try:
+        with open(path) as f:
+            return f.read().strip()
+    except:
+        return None
+
+def print_sensor_values(hwmon):
+    name = read_file(os.path.join(hwmon, "name"))
+    if not name:
+        print(f"Skipping {hwmon} ({name}) - not an INA226 device")
+        return  # Only INA226 devices
+
+    print(f"\n=== {hwmon} ({name} : {lookup[name]}) ===")
+
+    # Possible sensor types to read
+    sensor_types = ["in", "curr", "power"]
+    rst = ""
+    for sensor_type in sensor_types:
+        files = glob.glob(os.path.join(hwmon, f"{sensor_type}*_input"))
+        for file_path in files:
+            base = os.path.basename(file_path).replace("_input", "")
+            label_path = os.path.join(hwmon, f"{base}_label")
+            label = read_file(label_path) or base
+            value = read_file(file_path)
+            if value:
+                unit = {
+                    "in": "mV",
+                    "curr": "mA",
+                    "power": "uW" # I think this is the more appropriate unit
+                }.get(sensor_type, "")
+                print(f"{label}: {int(value)} {unit}")
+                rst += f"{int(value)},"
+    return rst
+# def getReadings(filePath, vccint, safe = True):
+#     # safe = True means that we are threading and salfe = False means we are not
+#     if not safe:
+#         print_sensor_values(f"{filePath}{vccint}") # run until the stop event is set
+#         return
+#     while not stop_event.is_set() and safe:
+#         print_sensor_values(f"{filePath}{vccint}") # run until the stop event is set
+#         time.sleep(0.25) # short break
+
 
 
 def ping_host(host, count=1, timeout=2):
@@ -178,11 +338,28 @@ def readData(bus, device_address, location):
         print(f"Error reading from device at address {hex(device_address)}: {e}")
         return None
 
-def readAll(bus, voltageLocation, currentLocation):
-    alt = readData(bus, VOLTAGE_RAIL, voltageLocation)
-    alt2 = readData(bus, VOLTAGE_RAIL, currentLocation)
-    if alt is not None and alt2 is not None:
-        print(f"Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {(alt/4096)*(alt2/4096):.2f}W")
+def readAll(bus, voltageLocation, currentLocation, file=False):
+    datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"Timestamp: {datetime_now}")
+    line = datetime_now + ","
+    for i in range(20):
+        line += print_sensor_values(f"{'/sys/class/hwmon/hwmon'}{i}") # run until the stop event is set
+    for rail in RAILS:
+        alt = readData(bus, rail["address"], voltageLocation)
+        alt2 = readData(bus, rail["address"], currentLocation)
+        if alt is not None and alt2 is not None:
+            decodedalt = decodeVoltage(alt)
+            decodedalt2 = decodeCurrent(alt2)
+            # print(f"Rail: {rail['name']} | Power: {alt:.2f}V x {alt2:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
+            # print(f"Rail: {rail['name']} | Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
+            # print(f"Rail: {rail['name']} | Power: {alt/4096}V x {alt2/4096}A = {((alt/4096)*(alt2/4096)):.2f}W")
+            print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
+            line += f"{decodedalt:.2f},{decodedalt2:.2f},{(decodedalt*decodedalt2):.2f},{alt},{alt2}"
+    if file:
+        with open("me.csv", "a") as f:
+            # print(f"Writing line to me.csv: {line}")
+            f.write(line + "\n")
+
 
 def getReadingsBus(busNumber, safe = True):
     # safe = True means that we are threading and safe = False means we are not
@@ -192,7 +369,7 @@ def getReadingsBus(busNumber, safe = True):
         return # we want to get out of here
     try:
         while not stop_event.is_set() and safe:
-            readAll(bus, 0x8B, 0x8C)
+            readAll(bus, 0x8B, 0x8C, file=True)
             time.sleep(0.25)
     except KeyboardInterrupt:
         stop_event.set()
@@ -210,6 +387,80 @@ def undervoltingLoop(initialvoltage, cwd, cmd, iter, step):
         runCommand(cmd, cwd)
         volt -= step
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
+    stop()
+
+def tripleLoop(initialvoltage, cwd, iter, step):
+    print("==============================")
+    print("========== Hi Maryam =========")
+    print("==============================")
+
+
+    subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
+    subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+    # runCommand("echo $XLNX_VART_FIRMWARE", cwd)
+    # offload("v_0.85") # offload the files to the board
+    # exit()
+
+    volt = NOMINAL_VOLTAGE
+    for dontuseme in range(1):
+        print("==============================")
+        print(f"Voltage: {volt:.2f} {dontuseme}")
+        print("==============================")
+        # setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
+        imageNum = 10
+        images = f"{imageNum}"
+        exePath = "./layer_executables/conv1_caps_layer.exe"
+        modelPath = "model/conv1.xmodel"
+        imgpath = "img/MNIST/t10k-images-idx3-ubyte"
+        firstOutput = f"/home/root/UV_outputs/conv1/v_{volt:.2f}"
+        firstcmd = stringbuilder([exePath, " ", modelPath, " ", imgpath, " ", images, " ", firstOutput])
+
+        exePath = "./layer_executables/primcaps_with_squash_layer.exe"
+        modelPath = "model/primarycap_conv2d.xmodel"
+        secondOutput = f"/home/root/UV_outputs/prim_caps/v_{volt:.2f}"
+        thirdOutput = f"/home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}"
+        convolutionalOutput = f"/home/root/convolutional_output_v_{volt:.2f}.txt"
+        secondcmd = stringbuilder([exePath, " ", modelPath, " ", firstOutput, " ", images, " ", secondOutput, " ", thirdOutput, " ", convolutionalOutput])
+
+        exePath = "./layer_executables/digit_caps_layer.exe"
+        weights = "weights/new_digitcaps_weights.txt"
+        digit_capsPath = f"/home/root/UV_outputs/digit_caps/v_{volt:.2f}"
+        thirdcmd = stringbuilder([exePath, " ", weights, " ", thirdOutput, " ", digit_capsPath, " ", images])
+
+        # cmb = firstcmd + ";" + secondcmd + ";" + thirdcmd
+        # print(f"Running command: {cmb}")
+        # we need them broken up
+        subprocess.run(f"mkdir -p /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
+        subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
+        subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
+        subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
+        order = [0.85, 0.85, 0.85]
+
+        subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
+        subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[0]=="X" else NOMINAL_VOLTAGE))
+        print(f'Voltage set to: {(volt if order[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
+        runCommand(firstcmd, cwd)
+
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[1]=="X" else NOMINAL_VOLTAGE))
+        print(f'Voltage set to: {(volt if order[1]=="X" else NOMINAL_VOLTAGE):.2f}V')
+        runCommand(secondcmd, cwd)
+
+        subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
+        subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[2]=="X" else NOMINAL_VOLTAGE))
+        print(f'Voltage set to: {(volt if order[2]=="X" else NOMINAL_VOLTAGE):.2f}V')
+        runCommand(thirdcmd, cwd)
+        # clean up the other files
+
+        # offload(f"v_{volt:.2f}") # offload the files to the board
+        subprocess.run(f"rm -rf /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
+        subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
+        subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
+        subprocess.run(f"rm -rf /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
+        volt -= step
     stop()
 
 def cmdBuilder(exepath, modelpath, xclpath, imgpath, weightspath, images, labelspath):
@@ -231,6 +482,10 @@ def main():
     # The nomial voltage is 0.85
     ITER = 31
     STEP = 0.01
+
+    # open and close me.csv
+    with open("me.csv", "w") as f:
+        pass
 
     isThreaded = True
     setVoltage(smbus2.SMBus(BUS_NUMBER), VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)
@@ -270,88 +525,43 @@ def main():
             print("==============================")
         elif mchoice == 7:
 
-            print("==============================")
-            print("========== Hi Maryam =========")
-            print("==============================")
+            if isThreaded:
+                monitorThread = threading.Thread(target=getReadingsBus, args=(4, True,), daemon=True)
+                shellThread = threading.Thread(target=tripleLoop, args=(NOMINAL_VOLTAGE, cwd, ITER, STEP), daemon=True)
+                print("Threads started")
+                monitorThread.start()
+                shellThread.start()
+                try:
+                    while monitorThread.is_alive() or shellThread.is_alive():
+                        monitorThread.join(timeout=1)
+                        shellThread.join(timeout=1)
 
-            if ITER > 28:
-                print(f"Warning: ITER is set to {ITER}, which is greater than 28. This may cause the voltage to drop below 0.57V, which is unsafe for the device.")
-                print("Please ensure that you are aware of the risks before proceeding.")
+                except KeyboardInterrupt:
+                    print("Shutting down")
+                    # end all other processes
+                    setVoltage(smbus2.SMBus(4), VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)  # reset back to normal
+                    exit(1)
+            else: # not threaded
+                # not running anything
+                pass
 
-            if NOMINAL_VOLTAGE - ITER*STEP < 0.57:
-                print(f"Warning: The final voltage after {ITER} iterations will be {NOMINAL_VOLTAGE - ITER*STEP:.2f}V, which is below the safe limit of 0.57V.")
-                print("Please ensure that you are aware of the risks before proceeding.")
 
-            subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-            subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
-            # runCommand("echo $XLNX_VART_FIRMWARE", cwd)
-            # offload("v_0.85") # offload the files to the board
-            # exit()
 
-            volt = NOMINAL_VOLTAGE
-            for _ in range(1):
-                print("==============================")
-                print(f"Voltage: {volt:.2f}")
-                print("==============================")
-                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-                imageNum = 10
-                images = f"{imageNum}"
-                exePath = "./layer_executables/conv1_caps_layer.exe"
-                modelPath = "model/conv1.xmodel"
-                imgpath = "img/MNIST/t10k-images-idx3-ubyte"
-                firstOutput = f"/home/root/UV_outputs/conv1/v_{volt:.2f}"
-                firstcmd = stringbuilder([exePath, " ", modelPath, " ", imgpath, " ", images, " ", firstOutput])
-
-                exePath = "./layer_executables/primcaps_with_squash_layer.exe"
-                modelPath = "model/primarycap_conv2d.xmodel"
-                secondOutput = f"/home/root/UV_outputs/prim_caps/v_{volt:.2f}"
-                thirdOutput = f"/home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}"
-                convolutionalOutput = f"/home/root/convolutional_output_v_{volt:.2f}.txt"
-                secondcmd = stringbuilder([exePath, " ", modelPath, " ", firstOutput, " ", images, " ", secondOutput, " ", thirdOutput, " ", convolutionalOutput])
-
-                exePath = "./layer_executables/digit_caps_layer.exe"
-                weights = "weights/new_digitcaps_weights.txt"
-                digit_capsPath = f"/home/root/UV_outputs/digit_caps/v_{volt:.2f}"
-                thirdcmd = stringbuilder([exePath, " ", weights, " ", thirdOutput, " ", digit_capsPath, " ", images])
-
-                # cmb = firstcmd + ";" + secondcmd + ";" + thirdcmd
-                # print(f"Running command: {cmb}")
-                # we need them broken up
-                subprocess.run(f"mkdir -p /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
-                subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
-                subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
-                subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
-                order = [0.85, 0.85, 0.85]
-
-                subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-                subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
-
-                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[0]=="X" else NOMINAL_VOLTAGE))
-                print(f'Voltage set to: {(volt if order[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
-                runCommand(firstcmd, cwd)
-
-                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[1]=="X" else NOMINAL_VOLTAGE))
-                print(f'Voltage set to: {(volt if order[1]=="X" else NOMINAL_VOLTAGE):.2f}V')
-                runCommand(secondcmd, cwd)
-
-                subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-                subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
-
-                setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if order[2]=="X" else NOMINAL_VOLTAGE))
-                print(f'Voltage set to: {(volt if order[2]=="X" else NOMINAL_VOLTAGE):.2f}V')
-                runCommand(thirdcmd, cwd)
-                # clean up the other files
-
-                # offload(f"v_{volt:.2f}") # offload the files to the board
-                subprocess.run(f"rm -rf /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
-                subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
-                subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
-                subprocess.run(f"rm -rf /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
-                volt -= STEP
             setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
 
             # scp -r ./UV_outputs/digit_caps/v_* beta@192.168.9.1:/home/beta/Desktop/Part-4-project/recovered/
 
+            print("==============================")
+            print("==========Finished============")
+            print("==============================")
+
+            # print("Copying files to board...")
+            # print("scp -r ./UV_outputs/digit_caps/v_* beta@192.168.9.1:/home/beta/Desktop/Part-4-project/recovered/")
+            print("scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/")
+            
+            exit(1)
+        elif mchoice == 8:
+            tripleLoop(NOMINAL_VOLTAGE, cwd, ITER, STEP)
             print("==============================")
             print("==========Finished============")
             print("==============================")
@@ -363,6 +573,8 @@ def main():
 
         else:
             raise Exception(f"{mchoice} is an invalid choice")
+
+
     else: # if it is not numeric (either blank or other input)
         print(f"Using 10 images as default")
         IMAGES = "10"
