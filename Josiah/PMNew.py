@@ -167,9 +167,9 @@ def decodeCurrent(raw_word):
     return mantissa * (2.0 ** exponent)
 
 lookup = {
+        "ina226_u79" : "VCCINT",
         "ina226_u15" : "VCCOPS3",
         "ina226_u92" : "VCCPSDDRPLL",
-        "ina226_u79" : "VCCINT",
         "ina226_u81" : "VCCBRAM",
         "ina226_u80" : "VCCAUX",
         "ina226_u84" : "VCC1V2",
@@ -195,13 +195,13 @@ def read_file(path):
     except:
         return None
 
-def print_sensor_values(hwmon):
+def print_sensor_values(hwmon, quiet=False):
     name = read_file(os.path.join(hwmon, "name"))
     if not name:
         print(f"Skipping {hwmon} ({name}) - not an INA226 device")
         return  # Only INA226 devices
-
-    print(f"\n=== {hwmon} ({name} : {lookup[name]}) ===")
+    if not quiet:
+        print(f"\n=== {hwmon} ({name} : {lookup[name]}) ===")
 
     # Possible sensor types to read
     sensor_types = ["in", "curr", "power"]
@@ -219,7 +219,8 @@ def print_sensor_values(hwmon):
                     "curr": "mA",
                     "power": "uW" # I think this is the more appropriate unit
                 }.get(sensor_type, "")
-                print(f"{label}: {int(value)} {unit}")
+                if not quiet:
+                    print(f"{label}: {int(value)} {unit}")
                 rst += f"{int(value)},"
     return rst
 # def getReadings(filePath, vccint, safe = True):
@@ -336,14 +337,15 @@ def readData(bus, device_address, location):
         return data
     except OSError as e:
         print(f"Error reading from device at address {hex(device_address)}: {e}")
-        return None
+        return 0xFFFF
 
-def readAll(bus, voltageLocation, currentLocation, file=False):
+def readAll(bus, voltageLocation, currentLocation, file=False, quiet=False):
     datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Timestamp: {datetime_now}")
+    if not quiet:
+        print(f"Timestamp: {datetime_now}")
     line = datetime_now + ","
     for i in range(20):
-        line += print_sensor_values(f"{'/sys/class/hwmon/hwmon'}{i}") # run until the stop event is set
+        line += print_sensor_values(f"{'/sys/class/hwmon/hwmon'}{i}", quiet=quiet) # run until the stop event is set
     for rail in RAILS:
         alt = readData(bus, rail["address"], voltageLocation)
         alt2 = readData(bus, rail["address"], currentLocation)
@@ -353,7 +355,8 @@ def readAll(bus, voltageLocation, currentLocation, file=False):
             # print(f"Rail: {rail['name']} | Power: {alt:.2f}V x {alt2:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
             # print(f"Rail: {rail['name']} | Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
             # print(f"Rail: {rail['name']} | Power: {alt/4096}V x {alt2/4096}A = {((alt/4096)*(alt2/4096)):.2f}W")
-            print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
+            if not quiet:
+                print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
             line += f"{decodedalt:.2f},{decodedalt2:.2f},{(decodedalt*decodedalt2):.2f},{alt},{alt2}"
     if file:
         with open("me.csv", "a") as f:
@@ -361,15 +364,15 @@ def readAll(bus, voltageLocation, currentLocation, file=False):
             f.write(line + "\n")
 
 
-def getReadingsBus(busNumber, safe = True):
+def getReadingsBus(busNumber, safe = True, quiet=False):
     # safe = True means that we are threading and safe = False means we are not
     bus = smbus2.SMBus(busNumber)
     if not safe:
-        readAll(bus, 0x8B, 0x8C)
+        readAll(bus, 0x8B, 0x8C, quiet=quiet)
         return # we want to get out of here
     try:
         while not stop_event.is_set() and safe:
-            readAll(bus, 0x8B, 0x8C, file=True)
+            readAll(bus, 0x8B, 0x8C, file=True, quiet=quiet)
             time.sleep(0.25)
     except KeyboardInterrupt:
         stop_event.set()
@@ -402,12 +405,12 @@ def tripleLoop(initialvoltage, cwd, iter, step):
     # exit()
 
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(1):
+    for dontuseme in range(iter):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
         # setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-        imageNum = 10
+        imageNum = 100
         images = f"{imageNum}"
         exePath = "./layer_executables/conv1_caps_layer.exe"
         modelPath = "model/conv1.xmodel"
@@ -434,7 +437,7 @@ def tripleLoop(initialvoltage, cwd, iter, step):
         subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
         subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
         subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
-        order = [0.85, 0.85, 0.85]
+        order = ["X", "X", "X"]
 
         subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
         subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
@@ -455,7 +458,7 @@ def tripleLoop(initialvoltage, cwd, iter, step):
         runCommand(thirdcmd, cwd)
         # clean up the other files
 
-        # offload(f"v_{volt:.2f}") # offload the files to the board
+        offload(f"v_{volt:.2f}") # offload the files to the board
         subprocess.run(f"rm -rf /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
         subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
         subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
@@ -485,7 +488,16 @@ def main():
 
     # open and close me.csv
     with open("me.csv", "w") as f:
-        pass
+        line = f"Timestamp,"
+        for l in lookup:
+            line += f"{l} Voltage,"
+            line += f"{l} Current,"
+            line += f"{l} Power,"
+        for r in RAILS:
+            line += f"{r['name']} Voltage,"
+            line += f"{r['name']} Current,"
+            line += f"{r['name']} Power,"
+        f.write(line + "\n")
 
     isThreaded = True
     setVoltage(smbus2.SMBus(BUS_NUMBER), VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)
@@ -526,7 +538,7 @@ def main():
         elif mchoice == 7:
 
             if isThreaded:
-                monitorThread = threading.Thread(target=getReadingsBus, args=(4, True,), daemon=True)
+                monitorThread = threading.Thread(target=getReadingsBus, args=(4, True, True), daemon=True)
                 shellThread = threading.Thread(target=tripleLoop, args=(NOMINAL_VOLTAGE, cwd, ITER, STEP), daemon=True)
                 print("Threads started")
                 monitorThread.start()
@@ -558,6 +570,21 @@ def main():
             # print("Copying files to board...")
             # print("scp -r ./UV_outputs/digit_caps/v_* beta@192.168.9.1:/home/beta/Desktop/Part-4-project/recovered/")
             print("scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/")
+            try:
+                print(f"Executing command: scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/")
+
+                child = pexpect.spawn("scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/")
+                child.expect('password:')
+                child.sendline(' ')
+                for line in child: # progress bar
+                    print(f"Line: {line.decode('utf-8').strip()}")
+
+                print("Copied successfully")
+
+                # remove the directory after copying
+
+            except Exception as e:
+                print(f"Error: {e}")
             
             exit(1)
         elif mchoice == 8:
@@ -594,7 +621,7 @@ def main():
     cmd = cmdBuilder(EXE_PATH, MODEL_PATH, XCL_PATH, IMG_PATH, WEIGHTS_PATH, IMAGES, LABELS_PATH)
 
     if isThreaded:
-        monitorThread = threading.Thread(target=getReadingsBus, args=(4, True,), daemon=True)
+        monitorThread = threading.Thread(target=getReadingsBus, args=(4, True, True), daemon=True)
         shellThread = threading.Thread(target=undervoltingLoop, args=(NOMINAL_VOLTAGE, cwd, cmd, ITER, STEP), daemon=True)
         print("Threads started")
         monitorThread.start()
