@@ -32,78 +32,210 @@ BUS_LINE = smbus2.SMBus(BUS_NUMBER)
 
 # PMBus is little ndian
 
-RAILS = [{
+ALL_RAILS = [{
     "name": "VCCINT",
     "address": 0x13,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 
 },
 {
     "name": "VCCBRAM",
     "address": 0x14,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 
-}, {
+},
+{
     "name": "VCCAUX",
     "address": 0x15,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
-}, {
+    "tags": "PMBUS"
+},
+{
     "name": "VCC1V2",
     "address": 0x16,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 
 }, {
     "name": "VCC3V3",
     "address": 0x17,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 
-}, {
+},
+{
     "name": "VCCDJ_FMC",
     "address": 0x18,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 },
 {
     "name": "VCCPSINTFP",
     "address": 0x0A,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
-}, {
+    "tags": "PMBUS"
+},
+{
     "name": "VCCPSINTLP",
     "address": 0x0B,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
     
-}, {
+},
+{
     "name": "DDR4_DIMM_VDDQ",
     "address": 0x1D,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
-}, {
+    "tags": "PMBUS"
+},
+{
     "name": "VCCOPS",
     "address": 0x10,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
-}, {
+    "tags": "PMBUS"
+},
+{
     "name": "UTIL3V3",
     "address": 0x1A,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 
-}, {
+},
+{
     "name": "UTIL5V0",
     "address": 0x1B,
     "vout_exponent": -12,
-    "tags": "MAXIM_PMBUS"
+    "tags": "PMBUS"
 },
+{
+    "name": "VCCOPS3",
+    "address": "/sys/class/hwmon/hwmon10",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCPSDDRPLL",
+    "address": "/sys/class/hwmon/hwmon11",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCINT",
+    "address": "/sys/class/hwmon/hwmon12",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCBRAM",
+    "address": "/sys/class/hwmon/hwmon13",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCAUX",
+    "address": "/sys/class/hwmon/hwmon14",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCC1V2",
+    "address": "/sys/class/hwmon/hwmon15",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCC3V3",
+    "address": "/sys/class/hwmon/hwmon16",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "CADJ_FMC",
+    "address": "/sys/class/hwmon/hwmon17",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "MGTAVCC",
+    "address": "/sys/class/hwmon/hwmon18",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "MGTAVTT",
+    "address": "/sys/class/hwmon/hwmon19",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCPSINTFP",
+    "address": "/sys/class/hwmon/hwmon2",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCPSINTLP",
+    "address": "/sys/class/hwmon/hwmon3",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCPSAUX",
+    "address": "/sys/class/hwmon/hwmon4",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCPSPLL",
+    "address": "/sys/class/hwmon/hwmon5",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "MGTRAVCC",
+    "address": "/sys/class/hwmon/hwmon6",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "MGTRAVTT",
+    "address": "/sys/class/hwmon/hwmon7",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCO_PSDDR_504",
+    "address": "/sys/class/hwmon/hwmon8",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCOPS",
+    "address": "/sys/class/hwmon/hwmon9",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCC",
+    "address": "/sys/class/hwmon/hwmon0",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VTT",
+    "address": "/sys/class/hwmon/hwmon1",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+}
 ]
 
-# exit()
+selected_rails = ALL_RAILS
+
+
+
+
 def findDevices():
     bus = smbus2.SMBus(4) # Not sure if we will change 1
     print("Scanning for devices")
@@ -204,23 +336,20 @@ def print_sensor_values(hwmon, quiet=False):
         print(f"\n=== {hwmon} ({name} : {lookup[name]}) ===")
 
     # Possible sensor types to read
-    sensor_types = ["in", "curr", "power"]
+    sensor_types = ["in2", "curr1", "power1"]
     rst = ""
     for sensor_type in sensor_types:
-        files = glob.glob(os.path.join(hwmon, f"{sensor_type}*_input"))
+        files = glob.glob(os.path.join(hwmon, f"{sensor_type}_input"))
         for file_path in files:
-            base = os.path.basename(file_path).replace("_input", "")
-            label_path = os.path.join(hwmon, f"{base}_label")
-            label = read_file(label_path) or base
             value = read_file(file_path)
             if value:
                 unit = {
-                    "in": "mV",
-                    "curr": "mA",
-                    "power": "uW" # I think this is the more appropriate unit
+                    "in2": "mV",
+                    "curr1": "mA",
+                    "power1": "uW" # I think this is the more appropriate unit
                 }.get(sensor_type, "")
                 if not quiet:
-                    print(f"{label}: {int(value)} {unit}")
+                    print(f"{sensor_type}_input: {int(value)} {unit}")
                 rst += f"{int(value)},"
     return rst
 # def getReadings(filePath, vccint, safe = True):
@@ -339,25 +468,40 @@ def readData(bus, device_address, location):
         print(f"Error reading from device at address {hex(device_address)}: {e}")
         return 0xFFFF
 
-def readAll(bus, voltageLocation, currentLocation, file=False, quiet=False):
+def readAll(bus, RAILS, file=False, quiet=False):
     datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     if not quiet:
         print(f"Timestamp: {datetime_now}")
     line = datetime_now + ","
-    for i in range(20):
-        line += print_sensor_values(f"{'/sys/class/hwmon/hwmon'}{i}", quiet=quiet) # run until the stop event is set
     for rail in RAILS:
-        alt = readData(bus, rail["address"], voltageLocation)
-        alt2 = readData(bus, rail["address"], currentLocation)
-        if alt is not None and alt2 is not None:
-            decodedalt = decodeVoltage(alt)
-            decodedalt2 = decodeCurrent(alt2)
-            # print(f"Rail: {rail['name']} | Power: {alt:.2f}V x {alt2:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
-            # print(f"Rail: {rail['name']} | Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
-            # print(f"Rail: {rail['name']} | Power: {alt/4096}V x {alt2/4096}A = {((alt/4096)*(alt2/4096)):.2f}W")
-            if not quiet:
-                print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
-            line += f"{decodedalt:.2f},{decodedalt2:.2f},{(decodedalt*decodedalt2):.2f},{alt},{alt2}"
+        if not quiet:
+            print(f"Reading rail: {rail['name']}")
+        if rail["tags"] == "HWMON":
+            line += print_sensor_values(f"{rail['address']}", quiet=quiet) # run until the stop event is set
+        if rail["tags"] == "PMBUS":
+            alt = readData(bus, rail["address"], 0x8B)  # voltage
+            alt2 = readData(bus, rail["address"], 0x8C) # current
+            if alt is not None and alt2 is not None:
+                decodedalt = decodeVoltage(alt)
+                decodedalt2 = decodeCurrent(alt2)
+                if not quiet:
+                    print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
+                line += f"{alt},{alt2},{0xFFFF},"
+            else: # failed
+                line += f"{0xFFFF},{0xFFFF},{0xFFFF},"
+
+    # for rail in RAILS:
+    #     alt = readData(bus, rail["address"], voltageLocation)
+    #     alt2 = readData(bus, rail["address"], currentLocation)
+    #     if alt is not None and alt2 is not None:
+    #         decodedalt = decodeVoltage(alt)
+    #         decodedalt2 = decodeCurrent(alt2)
+    #         # print(f"Rail: {rail['name']} | Power: {alt:.2f}V x {alt2:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
+    #         # print(f"Rail: {rail['name']} | Power: {alt/4096:.2f}V x {alt2/4096:.2f}A = {((alt/4096)*(alt2/4096)):.2f}W")
+    #         # print(f"Rail: {rail['name']} | Power: {alt/4096}V x {alt2/4096}A = {((alt/4096)*(alt2/4096)):.2f}W")
+    #         if not quiet:
+    #             print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
+    #         line += f"{decodedalt:.2f},{decodedalt2:.2f},{(decodedalt*decodedalt2):.2f},{alt},{alt2}"
     if file:
         with open("me.csv", "a") as f:
             # print(f"Writing line to me.csv: {line}")
@@ -368,11 +512,11 @@ def getReadingsBus(busNumber, safe = True, quiet=False):
     # safe = True means that we are threading and safe = False means we are not
     bus = smbus2.SMBus(busNumber)
     if not safe:
-        readAll(bus, 0x8B, 0x8C, quiet=quiet)
+        readAll(bus, selected_rails, quiet=quiet)
         return # we want to get out of here
     try:
         while not stop_event.is_set() and safe:
-            readAll(bus, 0x8B, 0x8C, file=True, quiet=quiet)
+            readAll(bus, selected_rails, file=True, quiet=quiet)
             time.sleep(0.25)
     except KeyboardInterrupt:
         stop_event.set()
@@ -405,12 +549,12 @@ def tripleLoop(initialvoltage, cwd, iter, step):
     # exit()
 
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(iter):
+    for dontuseme in range(1):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
         # setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-        imageNum = 100
+        imageNum = 10
         images = f"{imageNum}"
         exePath = "./layer_executables/conv1_caps_layer.exe"
         modelPath = "model/conv1.xmodel"
@@ -489,14 +633,10 @@ def main():
     # open and close me.csv
     with open("me.csv", "w") as f:
         line = f"Timestamp,"
-        for l in lookup:
-            line += f"{l} Voltage,"
-            line += f"{l} Current,"
-            line += f"{l} Power,"
-        for r in RAILS:
-            line += f"{r['name']} Voltage,"
-            line += f"{r['name']} Current,"
-            line += f"{r['name']} Power,"
+        for r in selected_rails:
+            line += f"[{r['tags']}] {r['name']} Voltage,"
+            line += f"[{r['tags']}] {r['name']} Current,"
+            line += f"[{r['tags']}] {r['name']} Power,"
         f.write(line + "\n")
 
     isThreaded = True

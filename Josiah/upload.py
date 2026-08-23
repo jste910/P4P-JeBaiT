@@ -101,7 +101,8 @@ if __name__ == "__main__":
     testLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/testing.sh"
     testLocation2 = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/testing2.sh"
     xmodelLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/model/partial_caps.xmodel"
-    setupLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/setup.sh"
+    # setupLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/setup.sh"
+    setupLocation = "setup.sh"
     validateLocation = "validate.py"
     pmnew = "PMNew.py"
     # All lists follow the form
@@ -118,7 +119,7 @@ if __name__ == "__main__":
     # upload_to_board([testLocation, user, board_ip, testingbase]) # testing script
     # upload_to_board([testLocation2, user, board_ip, testingbase]) # testing script 2
     # upload_to_board([xmodelLocation, user, board_ip, xBase]) # xmodel
-    # upload_to_board([setupLocation, user, board_ip, testingbase]) # setup
+    upload_to_board([setupLocation, user, board_ip, testingbase]) # setup
     # upload_to_board([validateLocation, user, board_ip, testingbase]) # validation script
     # upload_to_board([startLocation, user, board_ip, base]) # CapsuleNetwork.exe
     upload_to_board([pmnew, user, board_ip, testingbase]) # PMNew.py
