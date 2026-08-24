@@ -48,8 +48,8 @@ def main():
     labels = get_labels()
     pwd = os.getcwd()
 
-    # externalfolder = ["000", "100", "010", "001"]
-    externalfolder = ["000", "100"]
+    externalfolder = ["111", "100", "010", "001"]
+    # externalfolder = ["111", "100", "010"]
     # externalfolder = ["000"]
     for j in externalfolder:
         f=open(f"Josiah/results/{j}.csv","w")
@@ -113,7 +113,7 @@ def main():
                 resultarray.append(result)
             print(f"Correct: {ans_correct}/{ans_total} ({ans_correct/ans_total:.2%})")
             # f.write(f"Correct: {ans_correct}/{ans_total} ({ans_correct/ans_total:.2%})\n")
-            f.write(f"{volts},{ans_correct},{ans_total},{ans_correct/ans_total:.2}\n")
+            f.write(f"{volts} {ans_correct} {ans_total} {ans_correct/ans_total:.2}\n")
         f.close()
                 # output_path = os.path.join(output_dir, os.path.basename(file_path).replace(".txt", ".json"))
 
