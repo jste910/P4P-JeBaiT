@@ -61,8 +61,8 @@ def upload_to_board(lst):
         print(f"Executing command: {cmd}")
 
         child = pexpect.spawn(cmd)
-        # child.expect('password:')
-        # child.sendline('root')
+        child.expect('password:')
+        child.sendline('root')
         for line in child: # progress bar
             print(f"Line: {line.decode('utf-8').strip()}")
 
