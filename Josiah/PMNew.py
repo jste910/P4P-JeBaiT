@@ -20,15 +20,47 @@ BUS_LINE = smbus2.SMBus(BUS_NUMBER)
 stop_event = threading.Event()
 bus = smbus2.SMBus(4)
 
-CONV1EXEPATH = "./layer_executables/conv1_caps_layer.exe"
-CONV1MODEL = "model/conv1.xmodel"
-IMGPATH = "img/MNIST/t10k-images-idx3-ubyte"
-PRIMCAPS_EXEPATH = "./layer_executables/primcaps_with_squash_layer.exe"
-PRIMCAPS_MODEL = "model/primarycap_conv2d.xmodel"
-DIGITCAPS_EXEPATH = "./layer_executables/digit_caps_layer.exe"
-WEIGHTS_PATH = "weights/new_digitcaps_weights.txt"
+CAPSNETEXE = "./bin/capsnet_full.exe"
+CONV1EXE = "./bin/conv1.exe"
+CONV2DEXE = "./bin/primaryCaps_conv2d.exe"
+PRIMARYSQUASHEXE = "./bin/primarySquash.exe"
+DIGITCAPSEXE = "./bin/digitcaps.exe"
+LENGTHEXE = "./bin/length.exe"
 
-ALL_RAILS = [{
+PARTIALCAPSMODEL = "model/partial_caps.xmodel"
+CONV1MODEL = "model/conv1.xmodel"
+CONV2DMODEL = "model/primarycap_conv2d.xmodel"
+
+XCLBIN = "../dpu.xclbin"
+IMG_PATH = "img/MNIST/t10k-images-idx3-ubyte"
+WEIGHTS_PATH = "weights/new_digitcaps_weights.txt"
+images = "50"
+LABEL_PATH = "img/MNIST/t10k-labels-idx1-ubyte"
+RERUN = "1"
+
+fullcapsoutput = "/home/root/UV_outputs/intermediate_results/full_capsnet_0.85V"
+
+conv1folder = "/home/root/UV_outputs/intermediate_results/conv1"
+primarycapsfolder = "/home/root/UV_outputs/intermediate_results/primarycaps"
+squashfolder = "/home/root/UV_outputs/intermediate_results/squash"
+digitcapsfolder = "/home/root/UV_outputs/intermediate_results/digitcaps"
+lengthfolder = "/home/root/UV_outputs/intermediate_results/length"
+
+conv2dtxt = "/home/root/UV_outputs/convolutional_output"
+primarycapstxt = "/home/root/UV_outputs/primarycaps_output"
+primarysquashtxt = "/home/root/UV_outputs/primary_squash_output"
+digitcapstxt = "/home/root/UV_outputs/digitcaps_output"
+
+# CONV1EXEPATH = "./layer_executables/conv1_caps_layer.exe"
+# CONV1MODEL = "model/conv1.xmodel"
+# IMGPATH = "img/MNIST/t10k-images-idx3-ubyte"
+# PRIMCAPS_EXEPATH = "./layer_executables/primcaps_with_squash_layer.exe"
+# PRIMCAPS_MODEL = "model/primarycap_conv2d.xmodel"
+# DIGITCAPS_EXEPATH = "./layer_executables/digit_caps_layer.exe"
+# WEIGHTS_PATH = "weights/new_digitcaps_weights.txt"
+
+ALL_RAILS = [
+{
     "name": "VCCINT",
     "address": 0x13,
     "vout_exponent": -12,
@@ -78,7 +110,6 @@ ALL_RAILS = [{
     "address": 0x0B,
     "vout_exponent": -12,
     "tags": "PMBUS"
-    
 },
 {
     "name": "DDR4_DIMM_VDDQ",
@@ -227,7 +258,51 @@ ALL_RAILS = [{
 }
 ]
 
-selected_rails = ALL_RAILS
+selected_rails = [
+{
+    "name": "VCCINT",
+    "address": 0x13,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+},
+{
+    "name": "VCCBRAM",
+    "address": 0x14,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+
+},
+{
+    "name": "VCCPSINTFP",
+    "address": 0x0A,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+},
+{
+    "name": "DDR4_DIMM_VDDQ",
+    "address": 0x1D,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+},
+{
+    "name": "VCCPSINTLP",
+    "address": 0x0B,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+},
+{
+    "name": "VCCO_PSDDR_504",
+    "address": "/sys/class/hwmon/hwmon8",
+    "vout_exponent": -12,
+    "tags": "HWMON"
+},
+{
+    "name": "VCCAUX",
+    "address": 0x15,
+    "vout_exponent": -12,
+    "tags": "PMBUS"
+},
+]
 
 """
 GENERIC / UTILITY
@@ -317,7 +392,7 @@ def readAll(bus, RAILS, file=False, quiet=False):
         if not quiet:
             print(f"Reading rail: {rail['name']}")
         if rail["tags"] == "HWMON":
-            line += printSensorValues(f"{rail['address']}", quiet=quiet) # run until the stop event is set
+            line += printSensorValues(rail, quiet=quiet) # run until the stop event is set
         if rail["tags"] == "PMBUS":
             alt = readData(bus, rail["address"], 0x8B)  # voltage
             alt2 = readData(bus, rail["address"], 0x8C) # current
@@ -388,7 +463,7 @@ def pingHost(host, count=1, timeout=2):
     except Exception:
         return False
     
-def offload(lst):
+def offload(lst, file=False):
     """
     Offload the specified file(s) to the host computer
     This is generally for preserving file space which is limited
@@ -399,9 +474,12 @@ def offload(lst):
     ipAddress = "192.168.9.1"
     user = "beta"
 
-    fileLocationLocal = f"/home/root/UV_outputs/digit_caps/{lst}"
+    fileLocationLocal = lst
     dest = "/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
-    cmd = f"scp -r {fileLocationLocal} {user}@{ipAddress}:{dest}"
+    if file:
+        cmd = f"scp {fileLocationLocal} {user}@{ipAddress}:{dest}"
+    else:
+        cmd = f"scp -r {fileLocationLocal} {user}@{ipAddress}:{dest}"
     print(cmd)
     if not pingHost(ipAddress):
         print(f"Ping failed at: {ipAddress}")
@@ -421,81 +499,79 @@ def offload(lst):
 
         print("Copied successfully")
 
-        # remove the directory after copying
-        if os.path.isdir(fileLocationLocal):
-            print(f"Removing directory: {fileLocationLocal}")
-            subprocess.run(f"rm -rf {fileLocationLocal}", shell=True)
-            print("Directory removed successfully")
-
     except Exception as e:
         print(f"Error: {e}")
 
-def undervoltingLoop(initialvoltage, cwd, cmd, iter, step): # keeping incase it because easier to use than tripleLoop
-    volt = initialvoltage
-    for _ in range(iter):
+def undervoltingLoop(cwd, img, iter, step): # keeping incase it because easier to use than seperatedLoop
+
+    volt = NOMINAL_VOLTAGE
+    for _ in range(1):
         print("==============================")
         print(f"Voltage: {volt:.2f}")
         print("==============================")
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-        runCommand(cmd, cwd)
+        runCommand(f"{CAPSNETEXE} {PARTIALCAPSMODEL} {XCLBIN} {IMG_PATH} {WEIGHTS_PATH} {img} {LABEL_PATH} {RERUN} {fullcapsoutput}",
+                   cwd)
         volt -= step
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
     stop()
 
-def tripleLoop(initialvoltage, cwd, imageNum, step, iterations, voltingOrder = ["X", "X", "X"]):
+def seperatedLoop(cwd, img, step, iter, voltingOrder = ["X", "X", "X", "X", "X"]):
     print("==============================")
     print("========== Hi Maryam =========")
     print("==============================")
 
-
-    subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-    subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
-
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(iterations):
+    for dontuseme in range(1):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
 
-        firstOutput = f"/home/root/UV_outputs/conv1/v_{volt:.2f}"
-        firstcmd = stringbuilder([CONV1EXEPATH, " ", CONV1MODEL, " ", IMGPATH, " ", f"{imageNum}", " ", firstOutput])
+        conv1 = f"{CONV1EXE} {CONV1MODEL} {IMG_PATH} {img} {conv1folder}_{volt:.2f}V {RERUN}"
+        primaryCaps = f"{CONV2DEXE} {CONV2DMODEL} {conv1folder}_{volt:.2f}V {img} {primarycapsfolder}_{volt:.2f}V {conv2dtxt}.txt {RERUN}"
+        primarySquash = f"{PRIMARYSQUASHEXE} {XCLBIN} {primarycapsfolder}_{volt:.2f}V {img} {squashfolder}_{volt:.2f}V {primarycapstxt}.txt {RERUN}"
+        digitCaps = f"{DIGITCAPSEXE} {XCLBIN} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt}.txt {RERUN}"
+        length = f"{LENGTHEXE} {XCLBIN} {digitcapsfolder}_{volt:.2f}V {img} {lengthfolder}_{volt:.2f}V {digitcapstxt}.txt {RERUN}"
 
-        secondOutput = f"/home/root/UV_outputs/prim_caps/v_{volt:.2f}"
-        thirdOutput = f"/home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}"
-        convolutionalOutput = f"/home/root/convolutional_output_v_{volt:.2f}.txt"
-        secondcmd = stringbuilder([PRIMCAPS_EXEPATH, " ", PRIMCAPS_MODEL, " ", firstOutput, " ", f"{imageNum}", " ", secondOutput, " ", thirdOutput, " ", convolutionalOutput])
-
-        digit_capsPath = f"/home/root/UV_outputs/digit_caps/v_{volt:.2f}"
-        thirdcmd = stringbuilder([DIGITCAPS_EXEPATH, " ", WEIGHTS_PATH, " ", thirdOutput, " ", digit_capsPath, " ", f"{imageNum}"])
-        subprocess.run(f"mkdir -p /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
-        subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
-        subprocess.run(f"mkdir -p /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
-        subprocess.run(f"mkdir -p /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
-
-        subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-        subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+        subprocess.run(f"mkdir -p {conv1folder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"mkdir -p {primarycapsfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"mkdir -p {squashfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"mkdir -p {digitcapsfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"mkdir -p {lengthfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"touch {conv2dtxt}.txt", shell=True)
+        subprocess.run(f"touch {primarycapstxt}.txt", shell=True)
+        subprocess.run(f"touch {primarysquashtxt}.txt", shell=True)
+        subprocess.run(f"touch {digitcapstxt}.txt", shell=True)
 
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE))
         print(f'Voltage set to: {(volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
-        runCommand(firstcmd, cwd)
+        runCommand(conv1, cwd)
 
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[1]=="X" else NOMINAL_VOLTAGE))
         print(f'Voltage set to: {(volt if voltingOrder[1]=="X" else NOMINAL_VOLTAGE):.2f}V')
-        runCommand(secondcmd, cwd)
-
-        subprocess.run("export XLNX_VART_FIRMWARE=\"/run/media/mmcblk0p1/four_kernels.xclbin\"", shell=True)
-        subprocess.run("echo $XLNX_VART_FIRMWARE", shell=True)
+        runCommand(primaryCaps, cwd)
 
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[2]=="X" else NOMINAL_VOLTAGE))
         print(f'Voltage set to: {(volt if voltingOrder[2]=="X" else NOMINAL_VOLTAGE):.2f}V')
-        runCommand(thirdcmd, cwd)
-        # clean up the other files
+        runCommand(primarySquash, cwd)
 
-        offload(f"v_{volt:.2f}") # offload the files to the board
-        subprocess.run(f"rm -rf /home/root/UV_outputs/conv1/v_{volt:.2f}", shell=True)
-        subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps/v_{volt:.2f}", shell=True)
-        subprocess.run(f"rm -rf /home/root/UV_outputs/prim_caps_squash/v_{volt:.2f}", shell=True)
-        subprocess.run(f"rm -rf /home/root/UV_outputs/digit_caps/v_{volt:.2f}", shell=True)
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[3]=="X" else NOMINAL_VOLTAGE))
+        print(f'Voltage set to: {(volt if voltingOrder[3]=="X" else NOMINAL_VOLTAGE):.2f}V')
+        runCommand(digitCaps, cwd)
+
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE))
+        print(f'Voltage set to: {(volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE):.2f}V')
+        runCommand(length, cwd)
+
+        offload(f"/home/root/UV_outputs/intermediate_results", file=False) # offload the files to the board
+        offload(f"{digitcapstxt}.txt", file=True) # offload the files to the board
+
+        # subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
+        # subprocess.run(f"rm -rf {primarycapsfolder}_{volt:.2f}V", shell=True)
+        # subprocess.run(f"rm -rf {squashfolder}_{volt:.2f}V", shell=True)
+        # subprocess.run(f"rm -rf {digitcapsfolder}_{volt:.2f}V", shell=True)
+        # subprocess.run(f"rm -rf {lengthfolder}_{volt:.2f}V", shell=True)
+
         volt -= step
     stop()
 
@@ -505,7 +581,7 @@ def main():
     # All constants
     cwd = "."
 
-    IMAGES = "1"
+    IMAGES = "50"
     # The nomial voltage is 0.85
     ITER = 31
     STEP = 0.01
@@ -523,27 +599,23 @@ def main():
 
     print("=======================")
     print("=== Model Selection ===")
-    print("1. 1 Image")
-    print("2. 10 Images")
-    print("3. 25 Image")
-    print("4. 100 Image")
-    print("5. 1000 Image")
+    print("1. Capsnet Full 50 Images")
+    print("2. Capsnet Full 100 Images")
+    print("3. Capsnet Seperated 50 Images")
+    print("4. Capsnet Seperated 100 Images")
     print("6. Custom Amount")
     print("=======================")
     modelchoice = input(f"Please select a number of images (default is 10): ")
     if modelchoice.isnumeric(): # if it is numeric
         mchoice = int(modelchoice)
         if mchoice == 1:
-            IMAGES = "1"
+            shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 50, ITER, STEP), daemon=True)
         elif mchoice == 2:
-            IMAGES = "10"
+            shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 100, ITER, STEP), daemon=True)
         elif mchoice == 3:
-            IMAGES = "25"
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 4:
-            IMAGES = "100"
-        elif mchoice == 5:
-            IMAGES = "1000"
-            print("WARNING: This has not been tested and may crash the board due to memory issues. Please use with caution.")
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 99:
             exit()
         elif mchoice == 6:
@@ -561,11 +633,10 @@ def main():
 
 
     else: # if it is not numeric (either blank or other input)
-        print(f"Using 10 images as default")
-        IMAGES = "10"
+        print("No valid input detected, exiting...")
+        exit()
 
     monitorThread = threading.Thread(target=getReadingsBus, args=(4, True, True), daemon=True)
-    shellThread = threading.Thread(target=tripleLoop, args=(NOMINAL_VOLTAGE, cwd, IMAGES, STEP, ITER, ["X", "X", "X"]), daemon=True)
     print("Threads started")
     monitorThread.start()
     shellThread.start()
@@ -586,20 +657,22 @@ def main():
     print("==========Finished============")
     print("==============================")
 
-    try:
-        cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
-        print(f"Executing command: {cmd}")
 
-        child = pexpect.spawn(cmd)
-        child.expect('password:')
-        child.sendline(' ')
-        for line in child: # progress bar
-            print(f"Line: {line.decode('utf-8').strip()}")
+    # don't move me.csv yet
+    # try:
+    #     cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+    #     print(f"Executing command: {cmd}")
 
-        print("Copied successfully")
+    #     child = pexpect.spawn(cmd)
+    #     child.expect('password:')
+    #     child.sendline(' ')
+    #     for line in child: # progress bar
+    #         print(f"Line: {line.decode('utf-8').strip()}")
 
-    except Exception as e:
-        print(f"Error: {e}")
+    #     print("Copied successfully")
+
+    # except Exception as e:
+    #     print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()

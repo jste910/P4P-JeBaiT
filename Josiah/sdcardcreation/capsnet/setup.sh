@@ -14,3 +14,4 @@ sha256sum "/run/media/mmcblk0p1/dpu.xclbin"
 sha256sum "$SCRIPT_DIR/PMNew.py"
 export XLNX_VART_FIRMWARE="/run/media/mmcblk0p1/dpu.xclbin"
 echo $XLNX_VART_FIRMWARE
+

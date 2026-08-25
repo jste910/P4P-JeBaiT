@@ -93,15 +93,13 @@ if __name__ == "__main__":
     board_ip = "192.168.9.2"
     base = "/run/media/mmcblk0p1/capsnet/bin"
     testingbase = "/run/media/mmcblk0p1/capsnet"
+    exebase = "/run/media/mmcblk0p1/capsnet/bin"
     xBase = "/run/media/mmcblk0p1/capsnet/model"
     user = "root"
     # ssh-keygen -f "/home/beta/.ssh/known_hosts" -R "192.168.9.2"
 
-    startLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/bin/CapsuleNetwork.exe"
-    testLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/testing.sh"
-    testLocation2 = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/testing2.sh"
-    xmodelLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/model/partial_caps.xmodel"
-    # setupLocation = "../../P4P-CapsuleNetworkAccelerator/accel/app/CapsuleNetwork/linux/setup.sh"
+
+
     setupLocation = "setup.sh"
     validateLocation = "validate.py"
     pmnew = "PMNew.py"
@@ -123,6 +121,23 @@ if __name__ == "__main__":
     # upload_to_board([validateLocation, user, board_ip, testingbase]) # validation script
     # upload_to_board([startLocation, user, board_ip, base]) # CapsuleNetwork.exe
     upload_to_board([pmnew, user, board_ip, testingbase]) # PMNew.py
+    # upload_to_board(["sdcardcreation/capsnet/bin/capsnet_full.exe", user, board_ip, exebase]) # capsnet_full.exe
+    # upload_to_board(["sdcardcreation/capsnet/setup.sh", user, board_ip, testingbase]) # capsnet_full.exe
 
     # bottom line is ~0.54
     # last known 100% acc is 0.56 but before also fails will need to run with more files to test properly
+
+
+# ./bin/capsnet_full.exe model/partial_caps.xmodel ../dpu.xclbin img/MNIST/t10k-images-idx3-ubyte weights/new_digitcaps_weights.txt 50 img/MNIST/t10k-labels-idx1-ubyte 50 intermediate_results/full_capsnet_0.85V
+
+
+# ssh-keygen -f "/home/beta/.ssh/known_hosts" -R "192.168.9.2"
+# run scp on a test file
+# yes
+# root
+
+# run scp on a test file on the board
+# y
+# ' '
+
+
