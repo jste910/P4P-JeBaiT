@@ -46,18 +46,10 @@ squashfolder = "/home/root/UV_outputs/intermediate_results/squash"
 digitcapsfolder = "/home/root/UV_outputs/intermediate_results/digitcaps"
 lengthfolder = "/home/root/UV_outputs/intermediate_results/length"
 
-conv2dtxt = "/home/root/UV_outputs/convolutional_output"
-primarycapstxt = "/home/root/UV_outputs/primarycaps_output"
-primarysquashtxt = "/home/root/UV_outputs/primary_squash_output"
-digitcapstxt = "/home/root/UV_outputs/digitcaps_output"
-
-# CONV1EXEPATH = "./layer_executables/conv1_caps_layer.exe"
-# CONV1MODEL = "model/conv1.xmodel"
-# IMGPATH = "img/MNIST/t10k-images-idx3-ubyte"
-# PRIMCAPS_EXEPATH = "./layer_executables/primcaps_with_squash_layer.exe"
-# PRIMCAPS_MODEL = "model/primarycap_conv2d.xmodel"
-# DIGITCAPS_EXEPATH = "./layer_executables/digit_caps_layer.exe"
-# WEIGHTS_PATH = "weights/new_digitcaps_weights.txt"
+conv2dtxt = "convolutional_output.txt"
+primarycapstxt = "primarycaps_output.txt"
+primarysquashtxt = "primary_squash_output.txt"
+digitcapstxt = "digitcaps_output.txt"
 
 ALL_RAILS = [
 {
@@ -320,6 +312,10 @@ def stringbuilder(args):
 def stop():
     stop_event.set()
 
+def stringme(v):
+    return f"{v[0]}{v[1]}{v[2]}{v[3]}{v[4]}"
+
+
 """
 MATHEMATICAL / CALCULATION FUNCTIONS
 """
@@ -476,6 +472,8 @@ def offload(lst, file=False):
 
     fileLocationLocal = lst
     dest = "/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+
+
     if file:
         cmd = f"scp {fileLocationLocal} {user}@{ipAddress}:{dest}"
     else:
@@ -516,32 +514,28 @@ def undervoltingLoop(cwd, img, iter, step): # keeping incase it because easier t
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
     stop()
 
-def seperatedLoop(cwd, img, step, iter, voltingOrder = ["X", "X", "X", "X", "X"]):
+def seperatedLoop(cwd, img, step, iter, voltingOrder):
     print("==============================")
     print("========== Hi Maryam =========")
     print("==============================")
 
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(1):
+    for dontuseme in range(iter):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
 
         conv1 = f"{CONV1EXE} {CONV1MODEL} {IMG_PATH} {img} {conv1folder}_{volt:.2f}V {RERUN}"
-        primaryCaps = f"{CONV2DEXE} {CONV2DMODEL} {conv1folder}_{volt:.2f}V {img} {primarycapsfolder}_{volt:.2f}V {conv2dtxt}.txt {RERUN}"
-        primarySquash = f"{PRIMARYSQUASHEXE} {XCLBIN} {primarycapsfolder}_{volt:.2f}V {img} {squashfolder}_{volt:.2f}V {primarycapstxt}.txt {RERUN}"
-        digitCaps = f"{DIGITCAPSEXE} {XCLBIN} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt}.txt {RERUN}"
-        length = f"{LENGTHEXE} {XCLBIN} {digitcapsfolder}_{volt:.2f}V {img} {lengthfolder}_{volt:.2f}V {digitcapstxt}.txt {RERUN}"
+        primaryCaps = f"{CONV2DEXE} {CONV2DMODEL} {conv1folder}_{volt:.2f}V {img} {primarycapsfolder}_{volt:.2f}V {conv2dtxt} {RERUN}"
+        primarySquash = f"{PRIMARYSQUASHEXE} {XCLBIN} {primarycapsfolder}_{volt:.2f}V {img} {squashfolder}_{volt:.2f}V {primarycapstxt} {RERUN}"
+        digitCaps = f"{DIGITCAPSEXE} {XCLBIN} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
+        length = f"{LENGTHEXE} {XCLBIN} {digitcapsfolder}_{volt:.2f}V {img} {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V {digitcapstxt} {RERUN}"
 
         subprocess.run(f"mkdir -p {conv1folder}_{volt:.2f}V", shell=True)
         subprocess.run(f"mkdir -p {primarycapsfolder}_{volt:.2f}V", shell=True)
         subprocess.run(f"mkdir -p {squashfolder}_{volt:.2f}V", shell=True)
         subprocess.run(f"mkdir -p {digitcapsfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"mkdir -p {lengthfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"touch {conv2dtxt}.txt", shell=True)
-        subprocess.run(f"touch {primarycapstxt}.txt", shell=True)
-        subprocess.run(f"touch {primarysquashtxt}.txt", shell=True)
-        subprocess.run(f"touch {digitcapstxt}.txt", shell=True)
+        subprocess.run(f"mkdir -p {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
 
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE))
         print(f'Voltage set to: {(volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
@@ -563,14 +557,13 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder = ["X", "X", "X", "X", "X"]
         print(f'Voltage set to: {(volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(length, cwd)
 
-        offload(f"/home/root/UV_outputs/intermediate_results", file=False) # offload the files to the board
-        offload(f"{digitcapstxt}.txt", file=True) # offload the files to the board
+        # offload(f"{lengthfolder}", file=False) # offload the files to the board
 
-        # subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
-        # subprocess.run(f"rm -rf {primarycapsfolder}_{volt:.2f}V", shell=True)
-        # subprocess.run(f"rm -rf {squashfolder}_{volt:.2f}V", shell=True)
-        # subprocess.run(f"rm -rf {digitcapsfolder}_{volt:.2f}V", shell=True)
-        # subprocess.run(f"rm -rf {lengthfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"rm -rf {primarycapsfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"rm -rf {squashfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"rm -rf {digitcapsfolder}_{volt:.2f}V", shell=True)
+        subprocess.run(f"rm -rf {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
 
         volt -= step
     stop()
@@ -603,6 +596,7 @@ def main():
     print("2. Capsnet Full 100 Images")
     print("3. Capsnet Seperated 50 Images")
     print("4. Capsnet Seperated 100 Images")
+    print("5. Capsnet Seperated Custom (NO MONITORING)")
     print("6. Custom Amount")
     print("=======================")
     modelchoice = input(f"Please select a number of images (default is 10): ")
@@ -616,7 +610,26 @@ def main():
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 4:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
+        elif mchoice == 100:
+            # run till death
+            undervoltingLoop(cwd, 100, STEP, 50)
+            exit()
         elif mchoice == 99:
+            exit()
+        elif mchoice == 5:
+            base = ["O", "O", "O", "O", "O"]
+            for i in range(len(base)):
+                base = ["O", "O", "O", "O", "O"]
+                base[i] = "X"
+                print(f"Running with {base}")
+                seperatedLoop(cwd, 100, STEP, ITER, base)
+
+            seperatedLoop(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"])
+            setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
+
+            print("==============================")
+            print("==========Finished============")
+            print("==============================")
             exit()
         elif mchoice == 6:
             IMAGES = input("Please enter the number of images: ")
