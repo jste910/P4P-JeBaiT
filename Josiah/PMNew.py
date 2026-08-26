@@ -38,7 +38,7 @@ images = "50"
 LABEL_PATH = "img/MNIST/t10k-labels-idx1-ubyte"
 RERUN = "1"
 
-fullcapsoutput = "/home/root/UV_outputs/intermediate_results/full_capsnet_0.85V"
+fullcapsoutput = "full_capsnet"
 
 conv1folder = "/home/root/UV_outputs/intermediate_results/conv1"
 primarycapsfolder = "/home/root/UV_outputs/intermediate_results/primarycaps"
@@ -500,16 +500,18 @@ def offload(lst, file=False):
     except Exception as e:
         print(f"Error: {e}")
 
-def undervoltingLoop(cwd, img, iter, step): # keeping incase it because easier to use than seperatedLoop
+def undervoltingLoop(cwd, img, step, iter): # keeping incase it because easier to use than seperatedLoop
 
     volt = NOMINAL_VOLTAGE
-    for _ in range(1):
+    for _ in range(iter):
         print("==============================")
         print(f"Voltage: {volt:.2f}")
         print("==============================")
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, volt)
-        runCommand(f"{CAPSNETEXE} {PARTIALCAPSMODEL} {XCLBIN} {IMG_PATH} {WEIGHTS_PATH} {img} {LABEL_PATH} {RERUN} {fullcapsoutput}",
-                   cwd)
+        runCommand(f"{CAPSNETEXE} {PARTIALCAPSMODEL} {XCLBIN} {IMG_PATH} {WEIGHTS_PATH} {img} {LABEL_PATH} {RERUN} {fullcapsoutput}", cwd)
+        # rename and move
+        subprocess.run(f"mv {fullcapsoutput}/capsnet_length_output.txt {fullcapsoutput}/full_{volt:.2f}V.txt", shell=True)
+        offload(f"{fullcapsoutput}/full_{volt:.2f}V.txt", file=True) # offload the files to the board
         volt -= step
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
     stop()
