@@ -92,6 +92,20 @@ public:
         digitcaps_weight_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
     }
 
+    void initialise_digitcaps_kernel_fixed(const int8_t* digitcaps_weight_fixed)
+    {
+        digitcaps_input_fixed.resize(wrapper_constants_v3::DIGITCAPS_INPUT_COUNT);
+        digitcaps_output_fixed.resize(wrapper_constants_v3::DIGITCAPS_OUTPUT_COUNT);
+
+        digitcaps_kernel = xrt::kernel(device, xclbin_uuid, "digitcaps_accel");
+        digitcaps_input_bo = xrt::bo(device, wrapper_constants_v3::DIGITCAPS_INPUT_BYTES,digitcaps_kernel.group_id(0));
+        digitcaps_weight_bo = xrt::bo(device, wrapper_constants_v3::DIGITCAPS_WEIGHT_BYTES,digitcaps_kernel.group_id(1));
+        digitcaps_output_bo = xrt::bo(device, wrapper_constants_v3::DIGITCAPS_OUTPUT_BYTES,digitcaps_kernel.group_id(2));
+        
+        digitcaps_weight_bo.write(digitcaps_weight_fixed,wrapper_constants_v3::DIGITCAPS_WEIGHT_BYTES,0);
+        digitcaps_weight_bo.sync(XCL_BO_SYNC_BO_TO_DEVICE);
+    }
+
     void update_digitcaps_kernel(const float* digitcaps_input)
     {
         convert_float_to_fixed32_16(digitcaps_input,digitcaps_input_fixed.data(),digitcaps_input_fixed.size());
