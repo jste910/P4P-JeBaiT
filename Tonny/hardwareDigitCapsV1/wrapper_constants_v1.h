@@ -13,7 +13,7 @@
  * All *_BYTES constants represent buffer sizes in bytes.
  */
 
-namespace wrapper_constants_v2
+namespace wrapper_constants_v1
 {
 
 // -----------------------------------------------------------------------------
@@ -119,7 +119,7 @@ static constexpr std::size_t DIGITCAPS_INPUT_BYTES =
     DIGITCAPS_INPUT_COUNT * sizeof(int32_t);
 
 static constexpr std::size_t DIGITCAPS_WEIGHT_BYTES =
-    DIGITCAPS_WEIGHT_COUNT * sizeof(int8_t);
+    DIGITCAPS_WEIGHT_COUNT * sizeof(int32_t);
 
 static constexpr std::size_t DIGITCAPS_OUTPUT_BYTES =
     DIGITCAPS_OUTPUT_COUNT * sizeof(int32_t);

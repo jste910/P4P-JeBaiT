@@ -13,10 +13,10 @@
 namespace fs = std::filesystem;
 using Clock = std::chrono::steady_clock;
 
-constexpr std::size_t inputSize = wrapper_constants::DIGITCAPS_INPUT_COUNT;
-constexpr std::size_t weightCount = wrapper_constants::DIGITCAPS_WEIGHT_COUNT;
-constexpr std::size_t weightBytes = wrapper_constants::DIGITCAPS_WEIGHT_BYTES;
-constexpr std::size_t outputSize = wrapper_constants::DIGITCAPS_OUTPUT_COUNT;
+constexpr std::size_t inputSize = wrapper_constants_v2::DIGITCAPS_INPUT_COUNT;
+constexpr std::size_t weightCount = wrapper_constants_v2::DIGITCAPS_WEIGHT_COUNT;
+constexpr std::size_t weightBytes = wrapper_constants_v2::DIGITCAPS_WEIGHT_BYTES;
+constexpr std::size_t outputSize = wrapper_constants_v2::DIGITCAPS_OUTPUT_COUNT;
 constexpr uint32_t warmupRuns = 10;
 
 fs::path getInputPath(const fs::path& dir, uint32_t index, const std::string& fileName)
