@@ -38,6 +38,14 @@ images = "50"
 LABEL_PATH = "img/MNIST/t10k-labels-idx1-ubyte"
 RERUN = "1"
 
+INFEXE = "./bin/digitcaps_v3.exe" # missing exe
+ALT_WEIGHTS_PATH = "weights/new_digitcaps_weight_fixed7_1.bin"
+SWINF = "./bin/sw_digitcaps.exe"
+INITEXE = "./bin/digitcaps_init_v3.exe"
+UPDATEEXE = "./bin/digitcaps_update_v3.exe"
+RUNEXE = "./bin/digitcaps_run_v3.exe"
+READEXE = "./bin/digitcaps_read_v3.exe"
+
 fullcapsoutput = "full_capsnet"
 
 conv1folder = "/home/root/UV_outputs/intermediate_results/conv1"
@@ -381,8 +389,9 @@ def setVoltage(bus, address, destination, voltageDecimal):
 
 def readAll(bus, RAILS, file=False, quiet=False):
     datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    if not quiet:
-        print(f"Timestamp: {datetime_now}")
+    print(f"Timestamp: {datetime_now}")
+    # if not quiet:
+    #     print(f"Timestamp: {datetime_now}")
     line = datetime_now + ","
     for rail in RAILS:
         if not quiet:
@@ -522,7 +531,7 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
     print("==============================")
 
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(iter):
+    for dontuseme in range(1):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
@@ -532,6 +541,18 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         primarySquash = f"{PRIMARYSQUASHEXE} {XCLBIN} {primarycapsfolder}_{volt:.2f}V {img} {squashfolder}_{volt:.2f}V {primarycapstxt} {RERUN}"
         digitCaps = f"{DIGITCAPSEXE} {XCLBIN} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
         length = f"{LENGTHEXE} {XCLBIN} {digitcapsfolder}_{volt:.2f}V {img} {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V {digitcapstxt} {RERUN}"
+
+        # For Digitcaps V3 Inference
+
+        digitcapsinference = f"{INFEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
+        digitcapssw = f"{SWINF} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
+        # # For HW Digitcaps Inference init
+        digitinferenceinit = f"{INITEXE} {XCLBIN} {ALT_WEIGHTS_PATH} 10000"
+        digitinferenceupdate = f"{UPDATEEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {primarysquashtxt} {RERUN}"
+        # For HW Digitcaps Inference Run
+
+        digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img0.txt {RERUN} drunoutput.txt"
+        digitinterferenceread = f"{READEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img0.txt {RERUN} digitcaps_read_output.txt"
 
         subprocess.run(f"mkdir -p {conv1folder}_{volt:.2f}V", shell=True)
         subprocess.run(f"mkdir -p {primarycapsfolder}_{volt:.2f}V", shell=True)
@@ -555,10 +576,32 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         print(f'Voltage set to: {(volt if voltingOrder[3]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(digitCaps, cwd)
 
+
+        # print("==============================")
+        # print(f"Running {digitcapsinference}")
+        # runCommand(digitcapsinference, cwd)
+        # print("==============================")
+        # print(f"Running {digitcapssw}")
+        # runCommand(digitcapssw, cwd)
+        print("==============================")
+        print(f"Running {digitinferenceinit}")
+        runCommand(digitinferenceinit, cwd)
+        print("==============================")
+        print(f"Running {digitinferenceupdate}")
+        runCommand(digitinferenceupdate, cwd)
+        for image in range(img):
+            # print("==============================")
+            digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img{image}.txt {RERUN} drunoutput.txt"
+            # print(f"Running {digitinferencerun}")
+            runCommand(digitinferencerun, cwd)
+            # print("==============================")
+            digitinterferenceread = f"{READEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img{image}.txt {RERUN} digitcaps_read_output.txt"
+            # print(f"Running {digitinterferenceread}")
+            runCommand(digitinterferenceread, cwd)
+
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE))
         print(f'Voltage set to: {(volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(length, cwd)
-
         # offload(f"{lengthfolder}", file=False) # offload the files to the board
 
         subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
@@ -566,6 +609,8 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         subprocess.run(f"rm -rf {squashfolder}_{volt:.2f}V", shell=True)
         subprocess.run(f"rm -rf {digitcapsfolder}_{volt:.2f}V", shell=True)
         subprocess.run(f"rm -rf {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
+
+
 
         volt -= step
     stop()
@@ -609,7 +654,7 @@ def main():
         elif mchoice == 2:
             shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 100, ITER, STEP), daemon=True)
         elif mchoice == 3:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 4:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 100:
@@ -673,7 +718,7 @@ def main():
     print("==============================")
 
 
-    # don't move me.csv yet
+    # # don't move me.csv yet
     # try:
     #     cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
     #     print(f"Executing command: {cmd}")

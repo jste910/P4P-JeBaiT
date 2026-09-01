@@ -93,7 +93,7 @@ if __name__ == "__main__":
     board_ip = "192.168.9.2"
     base = "/run/media/mmcblk0p1/capsnet/bin"
     testingbase = "/run/media/mmcblk0p1/capsnet"
-    exebase = "/run/media/mmcblk0p1/capsnet/bin"
+    exebase = "/run/media/mmcblk0p1/capsnet/weights"
     xBase = "/run/media/mmcblk0p1/capsnet/model"
     user = "root"
     # ssh-keygen -f "/home/beta/.ssh/known_hosts" -R "192.168.9.2"
@@ -103,6 +103,7 @@ if __name__ == "__main__":
     setupLocation = "setup.sh"
     validateLocation = "validate.py"
     pmnew = "PMNew.py"
+    sd = "sdcardcreation/capsnet/weights/new_digitcaps_weight_fixed7_1.bin"
     # All lists follow the form
     # 1. Source location
     # 2. user (default = root)
@@ -117,7 +118,7 @@ if __name__ == "__main__":
     # upload_to_board([testLocation, user, board_ip, testingbase]) # testing script
     # upload_to_board([testLocation2, user, board_ip, testingbase]) # testing script 2
     # upload_to_board([xmodelLocation, user, board_ip, xBase]) # xmodel
-    upload_to_board([setupLocation, user, board_ip, testingbase]) # setup
+    # upload_to_board([setupLocation, user, board_ip, testingbase]) # setup
     # upload_to_board([validateLocation, user, board_ip, testingbase]) # validation script
     # upload_to_board([startLocation, user, board_ip, base]) # CapsuleNetwork.exe
     upload_to_board([pmnew, user, board_ip, testingbase]) # PMNew.py
@@ -132,7 +133,7 @@ if __name__ == "__main__":
 
 
 # ssh-keygen -f "/home/beta/.ssh/known_hosts" -R "192.168.9.2"
-# run scp on a test file
+# scp PMNew.py root@192.168.9.2:/run/media/mmcblk0p1/capsnet
 # yes
 # root
 
