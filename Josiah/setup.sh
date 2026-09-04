@@ -14,4 +14,4 @@ sha256sum "/run/media/mmcblk0p1/dpu.xclbin"
 sha256sum "$SCRIPT_DIR/PMNew.py"
 export XLNX_VART_FIRMWARE="/run/media/mmcblk0p1/dpu.xclbin"
 echo $XLNX_VART_FIRMWARE
-scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+# scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"

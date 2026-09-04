@@ -5,6 +5,7 @@ import smbus2
 import subprocess
 import threading
 from datetime import datetime
+import time
 import pexpect
 """
 DEFINES
@@ -388,11 +389,9 @@ def setVoltage(bus, address, destination, voltageDecimal):
         return False
 
 def readAll(bus, RAILS, file=False, quiet=False):
-    datetime_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    print(f"Timestamp: {datetime_now}")
-    # if not quiet:
-    #     print(f"Timestamp: {datetime_now}")
-    line = datetime_now + ","
+    datetime_now = time.monotonic_ns()
+    # print(f"Timestamp: {time.monotonic_ns()}")
+    line = str(datetime_now) + ","
     for rail in RAILS:
         if not quiet:
             print(f"Reading rail: {rail['name']}")
@@ -401,12 +400,14 @@ def readAll(bus, RAILS, file=False, quiet=False):
         if rail["tags"] == "PMBUS":
             alt = readData(bus, rail["address"], 0x8B)  # voltage
             alt2 = readData(bus, rail["address"], 0x8C) # current
-            if alt is not None and alt2 is not None:
+            alt3 = readData(bus, rail["address"], 0x8D) # temperature
+            if alt is not None and alt2 is not None and alt3 is not None:
                 decodedalt = decodeVoltage(alt)
                 decodedalt2 = decodeCurrent(alt2)
+                decodedalt3 = decodeCurrent(alt3)
                 if not quiet:
-                    print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W")
-                line += f"{alt},{alt2},{0xFFFF},"
+                    print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W and {decodedalt3}")
+                line += f"{alt},{alt2},{alt3},"
             else: # failed
                 line += f"{0xFFFF},{0xFFFF},{0xFFFF},"
 
@@ -531,7 +532,7 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
     print("==============================")
 
     volt = NOMINAL_VOLTAGE
-    for dontuseme in range(1):
+    for dontuseme in range(iter):
         print("==============================")
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
@@ -560,20 +561,9 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         subprocess.run(f"mkdir -p {digitcapsfolder}_{volt:.2f}V", shell=True)
         subprocess.run(f"mkdir -p {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
 
-        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE))
-        print(f'Voltage set to: {(volt if voltingOrder[0]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(conv1, cwd)
-
-        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[1]=="X" else NOMINAL_VOLTAGE))
-        print(f'Voltage set to: {(volt if voltingOrder[1]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(primaryCaps, cwd)
-
-        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[2]=="X" else NOMINAL_VOLTAGE))
-        print(f'Voltage set to: {(volt if voltingOrder[2]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(primarySquash, cwd)
-
-        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[3]=="X" else NOMINAL_VOLTAGE))
-        print(f'Voltage set to: {(volt if voltingOrder[3]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(digitCaps, cwd)
 
 
@@ -589,20 +579,25 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         print("==============================")
         print(f"Running {digitinferenceupdate}")
         runCommand(digitinferenceupdate, cwd)
+
+        print("==============================")
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt))
+        print(f'Voltage set to: {volt:.2f}V')
+        digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} "
+        print(f"Running {digitinferencerun}")
+        runCommand(digitinferencerun, cwd)
+        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)
+        print(f'Voltage set to: {volt:.2f}V')
+
+
         for image in range(img):
-            # print("==============================")
-            digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img{image}.txt {RERUN} drunoutput.txt"
-            # print(f"Running {digitinferencerun}")
-            runCommand(digitinferencerun, cwd)
             # print("==============================")
             digitinterferenceread = f"{READEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img{image}.txt {RERUN} digitcaps_read_output.txt"
             # print(f"Running {digitinterferenceread}")
             runCommand(digitinterferenceread, cwd)
 
-        setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE))
-        print(f'Voltage set to: {(volt if voltingOrder[4]=="X" else NOMINAL_VOLTAGE):.2f}V')
         runCommand(length, cwd)
-        # offload(f"{lengthfolder}", file=False) # offload the files to the board
+        offload(f"{lengthfolder}", file=False) # offload the files to the board
 
         subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
         subprocess.run(f"rm -rf {primarycapsfolder}_{volt:.2f}V", shell=True)
@@ -646,7 +641,7 @@ def main():
     print("5. Capsnet Seperated Custom (NO MONITORING)")
     print("6. Custom Amount")
     print("=======================")
-    modelchoice = input(f"Please select a number of images (default is 10): ")
+    modelchoice = input(f"Please enter your choice: ")
     if modelchoice.isnumeric(): # if it is numeric
         mchoice = int(modelchoice)
         if mchoice == 1:
@@ -654,9 +649,9 @@ def main():
         elif mchoice == 2:
             shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 100, ITER, STEP), daemon=True)
         elif mchoice == 3:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 4:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
         elif mchoice == 100:
             # run till death
             undervoltingLoop(cwd, 100, STEP, 50)
@@ -664,13 +659,6 @@ def main():
         elif mchoice == 99:
             exit()
         elif mchoice == 5:
-            base = ["O", "O", "O", "O", "O"]
-            for i in range(len(base)):
-                base = ["O", "O", "O", "O", "O"]
-                base[i] = "X"
-                print(f"Running with {base}")
-                seperatedLoop(cwd, 100, STEP, ITER, base)
-
             seperatedLoop(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"])
             setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
 
@@ -718,21 +706,21 @@ def main():
     print("==============================")
 
 
-    # # don't move me.csv yet
-    # try:
-    #     cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
-    #     print(f"Executing command: {cmd}")
+    # don't move me.csv yet
+    try:
+        cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+        print(f"Executing command: {cmd}")
 
-    #     child = pexpect.spawn(cmd)
-    #     child.expect('password:')
-    #     child.sendline(' ')
-    #     for line in child: # progress bar
-    #         print(f"Line: {line.decode('utf-8').strip()}")
+        child = pexpect.spawn(cmd)
+        child.expect('password:')
+        child.sendline(' ')
+        for line in child: # progress bar
+            print(f"Line: {line.decode('utf-8').strip()}")
 
-    #     print("Copied successfully")
+        print("Copied successfully")
 
-    # except Exception as e:
-    #     print(f"Error: {e}")
+    except Exception as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
