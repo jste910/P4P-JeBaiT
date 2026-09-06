@@ -133,6 +133,7 @@ if __name__ == "__main__":
 
 
 # ssh-keygen -f "/home/beta/.ssh/known_hosts" -R "192.168.9.2"
+# sudo ip route add 192.168.9.0/24 dev enp1s0
 # scp PMNew.py root@192.168.9.2:/run/media/mmcblk0p1/capsnet
 # yes
 # root

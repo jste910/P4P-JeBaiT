@@ -51,9 +51,9 @@ fullcapsoutput = "full_capsnet"
 
 conv1folder = "/home/root/UV_outputs/intermediate_results/conv1"
 primarycapsfolder = "/home/root/UV_outputs/intermediate_results/primarycaps"
-squashfolder = "/home/root/UV_outputs/intermediate_results/squash"
+squashfolder = "intermediate_results/squash_0.85V"
 digitcapsfolder = "/home/root/UV_outputs/intermediate_results/digitcaps"
-lengthfolder = "/home/root/UV_outputs/intermediate_results/length"
+lengthfolder = "intermediate_results/length"
 
 conv2dtxt = "convolutional_output.txt"
 primarycapstxt = "primarycaps_output.txt"
@@ -313,7 +313,14 @@ def cmdBuilder(exepath, modelpath, xclpath, imgpath, weightspath, images, labels
     return f"{exepath} {modelpath} {xclpath} {imgpath} {weightspath} {images} {labelspath}"
 
 def runCommand(cmd, cwd):
-    subprocess.run(cmd, shell=True, cwd=cwd)
+    # subprocess.run(cmd, shell=True, cwd=cwd)
+    process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+
+    for line in process.stdout:
+        text = line.decode('utf-8').strip()
+        print(f"[{time.monotonic_ns()}] {text}")
+    process.wait()  # Wait for the process to finish
+
 
 def stringbuilder(args):
     return "".join(args)
@@ -392,6 +399,7 @@ def readAll(bus, RAILS, file=False, quiet=False):
     datetime_now = time.monotonic_ns()
     # print(f"Timestamp: {time.monotonic_ns()}")
     line = str(datetime_now) + ","
+
     for rail in RAILS:
         if not quiet:
             print(f"Reading rail: {rail['name']}")
@@ -424,7 +432,7 @@ def getReadingsBus(busNumber, safe = True, quiet=False):
     try:
         while not stop_event.is_set() and safe:
             readAll(bus, selected_rails, file=True, quiet=quiet)
-            time.sleep(0.25)
+            time.sleep(0.125) # 8Hz
     except KeyboardInterrupt:
         stop_event.set()
 
@@ -526,7 +534,7 @@ def undervoltingLoop(cwd, img, step, iter): # keeping incase it because easier t
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
     stop()
 
-def seperatedLoop(cwd, img, step, iter, voltingOrder):
+def seperatedLoop(cwd, img, step, iter, version=3):
     print("==============================")
     print("========== Hi Maryam =========")
     print("==============================")
@@ -537,76 +545,30 @@ def seperatedLoop(cwd, img, step, iter, voltingOrder):
         print(f"Voltage: {volt:.2f} {dontuseme}")
         print("==============================")
 
-        conv1 = f"{CONV1EXE} {CONV1MODEL} {IMG_PATH} {img} {conv1folder}_{volt:.2f}V {RERUN}"
-        primaryCaps = f"{CONV2DEXE} {CONV2DMODEL} {conv1folder}_{volt:.2f}V {img} {primarycapsfolder}_{volt:.2f}V {conv2dtxt} {RERUN}"
-        primarySquash = f"{PRIMARYSQUASHEXE} {XCLBIN} {primarycapsfolder}_{volt:.2f}V {img} {squashfolder}_{volt:.2f}V {primarycapstxt} {RERUN}"
-        digitCaps = f"{DIGITCAPSEXE} {XCLBIN} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
-        length = f"{LENGTHEXE} {XCLBIN} {digitcapsfolder}_{volt:.2f}V {img} {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V {digitcapstxt} {RERUN}"
+        if (version == 1):
+            ALT_WEIGHTS_PATH = "weights/new_digitcaps_weights_fixed32_16.bin"
+        elif (version == 2):
+            ALT_WEIGHTS_PATH = "weights/new_digitcaps_weights_int8.bin"
+        elif (version == 3):
+            ALT_WEIGHTS_PATH = "weights/new_digitcaps_weight_fixed7_1.bin"
+        else:
+            print("ERROR INVALID")
+            exit()
 
-        # For Digitcaps V3 Inference
-
-        digitcapsinference = f"{INFEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
-        digitcapssw = f"{SWINF} {WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {digitcapsfolder}_{volt:.2f}V {primarysquashtxt} {RERUN}"
-        # # For HW Digitcaps Inference init
-        digitinferenceinit = f"{INITEXE} {XCLBIN} {ALT_WEIGHTS_PATH} 10000"
-        digitinferenceupdate = f"{UPDATEEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} {primarysquashtxt} {RERUN}"
-        # For HW Digitcaps Inference Run
-
-        digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img0.txt {RERUN} drunoutput.txt"
-        digitinterferenceread = f"{READEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img0.txt {RERUN} digitcaps_read_output.txt"
-
-        subprocess.run(f"mkdir -p {conv1folder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"mkdir -p {primarycapsfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"mkdir -p {squashfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"mkdir -p {digitcapsfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"mkdir -p {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
-
-        runCommand(conv1, cwd)
-        runCommand(primaryCaps, cwd)
-        runCommand(primarySquash, cwd)
-        runCommand(digitCaps, cwd)
-
-
-        # print("==============================")
-        # print(f"Running {digitcapsinference}")
-        # runCommand(digitcapsinference, cwd)
-        # print("==============================")
-        # print(f"Running {digitcapssw}")
-        # runCommand(digitcapssw, cwd)
-        print("==============================")
-        print(f"Running {digitinferenceinit}")
-        runCommand(digitinferenceinit, cwd)
-        print("==============================")
-        print(f"Running {digitinferenceupdate}")
-        runCommand(digitinferenceupdate, cwd)
+        subprocess.run(f"mkdir -p {lengthfolder}/{volt:.2f}V", shell=True)
 
         print("==============================")
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt))
         print(f'Voltage set to: {volt:.2f}V')
-        digitinferencerun = f"{RUNEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V {img} "
-        print(f"Running {digitinferencerun}")
-        runCommand(digitinferencerun, cwd)
+        digitexe = f"./bin/digitcaps_v{version}.exe {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder} {img} {lengthfolder}/{volt:.2f}V out.txt 1"
+        print(f"Running {digitexe}")
+        runCommand(digitexe, cwd)
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)
         print(f'Voltage set to: {volt:.2f}V')
 
+        offload(f"{lengthfolder}/{volt:.2f}V/", file=False) # offload the files to the board
 
-        for image in range(img):
-            # print("==============================")
-            digitinterferenceread = f"{READEXE} {XCLBIN} {ALT_WEIGHTS_PATH} {squashfolder}_{volt:.2f}V/img{image}.txt {RERUN} digitcaps_read_output.txt"
-            # print(f"Running {digitinterferenceread}")
-            runCommand(digitinterferenceread, cwd)
-
-        runCommand(length, cwd)
-        offload(f"{lengthfolder}", file=False) # offload the files to the board
-
-        subprocess.run(f"rm -rf {conv1folder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"rm -rf {primarycapsfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"rm -rf {squashfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"rm -rf {digitcapsfolder}_{volt:.2f}V", shell=True)
-        subprocess.run(f"rm -rf {lengthfolder}/{stringme(voltingOrder)}/{volt:.2f}V", shell=True)
-
-
-
+        subprocess.run(f"rm -rf {lengthfolder}/{volt:.2f}V", shell=True) # remove the files from the board
         volt -= step
     stop()
 
@@ -634,48 +596,30 @@ def main():
 
     print("=======================")
     print("=== Model Selection ===")
-    print("1. Capsnet Full 50 Images")
-    print("2. Capsnet Full 100 Images")
-    print("3. Capsnet Seperated 50 Images")
-    print("4. Capsnet Seperated 100 Images")
-    print("5. Capsnet Seperated Custom (NO MONITORING)")
-    print("6. Custom Amount")
+    print("1. Digitcaps Version 1 10 Images (TEST)")
+    print("2. Digitcaps Version 1 1000 Images")
+    print("3. Digitcaps Version 2 10 Images (TEST)")
+    print("4. Digitcaps Version 2 1000 Images")
+    print("5. Digitcaps Version 3 10 Images (TEST)")
+    print("6. Digitcaps Version 3 1000 Images")
     print("=======================")
     modelchoice = input(f"Please enter your choice: ")
     if modelchoice.isnumeric(): # if it is numeric
         mchoice = int(modelchoice)
         if mchoice == 1:
-            shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 50, ITER, STEP), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 1), daemon=True)
         elif mchoice == 2:
-            shellThread = threading.Thread(target=undervoltingLoop, args=(cwd, 100, ITER, STEP), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 1), daemon=True)
         elif mchoice == 3:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 2), daemon=True)
         elif mchoice == 4:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"]), daemon=True)
-        elif mchoice == 100:
-            # run till death
-            undervoltingLoop(cwd, 100, STEP, 50)
-            exit()
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 2), daemon=True)
+        elif mchoice == 5:
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 3), daemon=True)
+        elif mchoice == 6:
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 3), daemon=True)
         elif mchoice == 99:
             exit()
-        elif mchoice == 5:
-            seperatedLoop(cwd, 100, STEP, ITER, ["X", "X", "X", "X", "X"])
-            setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # reset back to normal
-
-            print("==============================")
-            print("==========Finished============")
-            print("==============================")
-            exit()
-        elif mchoice == 6:
-            IMAGES = input("Please enter the number of images: ")
-            if not IMAGES.isnumeric():
-                raise Exception(f"{IMAGES} is not a valid number of images")
-            ITER = int(input("Please enter the number of iterations (type: integer): "))
-            STEP = float(input("Please enter the step size (type: float): "))
-            print("==============================")
-            print("====== Running Command =======")
-            print("==============================")
-
         else:
             raise Exception(f"{mchoice} is an invalid choice")
 
