@@ -60,6 +60,9 @@ primarycapstxt = "primarycaps_output.txt"
 primarysquashtxt = "primary_squash_output.txt"
 digitcapstxt = "digitcaps_output.txt"
 
+filename = "log.txt"
+FREQUENCY = "0"
+
 ALL_RAILS = [
 {
     "name": "VCCINT",
@@ -319,6 +322,8 @@ def runCommand(cmd, cwd):
     for line in process.stdout:
         text = line.decode('utf-8').strip()
         print(f"[{time.monotonic_ns()}] {text}")
+        with open(filename, "a") as f:
+            f.write(f"[{time.monotonic_ns()}] {text}\n")
     process.wait()  # Wait for the process to finish
 
 
@@ -556,6 +561,15 @@ def seperatedLoop(cwd, img, step, iter, version=3):
             exit()
 
         subprocess.run(f"mkdir -p {lengthfolder}/{volt:.2f}V", shell=True)
+        # write a block of text to the filename
+        global filename
+        filename = f"{lengthfolder}/{volt:.2f}V/log.txt"
+        with open(filename, "w") as f:
+            f.write(f"ARCHITECTURE=v{version}\n")
+            f.write(f"FREQUENCY={FREQUENCY}MHz\n")
+            f.write(f"TARGET_VOLTAGE={volt:.2f}V\n")
+            f.write(f"WEIGHTS={ALT_WEIGHTS_PATH}\n")
+            f.write(f"NUM_IMAGES={img}\n")
 
         print("==============================")
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt))
@@ -565,6 +579,9 @@ def seperatedLoop(cwd, img, step, iter, version=3):
         runCommand(digitexe, cwd)
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE)
         print(f'Voltage set to: {volt:.2f}V')
+
+        with open(f"{lengthfolder}/{volt:.2f}V/log.txt", "a") as f:
+            f.write(f"STATUS=COMPLETED\n")
 
         offload(f"{lengthfolder}/{volt:.2f}V/", file=False) # offload the files to the board
 
@@ -628,8 +645,14 @@ def main():
         print("No valid input detected, exiting...")
         exit()
 
+    # find out the other information about the board
+    global FREQUENCY
+    FREQUENCY = input(f"Please enter the frequency of the board: ")
+    
+
     monitorThread = threading.Thread(target=getReadingsBus, args=(4, True, True), daemon=True)
     print("Threads started")
+    start = time.monotonic_ns()
     monitorThread.start()
     shellThread.start()
     try:
@@ -662,9 +685,13 @@ def main():
             print(f"Line: {line.decode('utf-8').strip()}")
 
         print("Copied successfully")
-
+    
     except Exception as e:
         print(f"Error: {e}")
+
+    end = time.monotonic_ns()
+    print(f"All done in {end - start} ns or {(end - start)/1e9} seconds")
+
 
 if __name__ == "__main__":
     main()
