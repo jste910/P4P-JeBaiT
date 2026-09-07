@@ -464,6 +464,7 @@ def printSensorValues(rail, quiet=False):
                 rst += f"{int(value)},"
             else:
                 rst += f"{0xFFFF},"
+    rst += f"{0xFFFF}," # add a placeholder for the temperature reading
     return rst
 
 """
