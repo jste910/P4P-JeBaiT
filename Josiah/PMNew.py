@@ -624,15 +624,15 @@ def main():
     if modelchoice.isnumeric(): # if it is numeric
         mchoice = int(modelchoice)
         if mchoice == 1:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 1), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 1), daemon=True)
         elif mchoice == 2:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 1), daemon=True)
         elif mchoice == 3:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 2), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 2), daemon=True)
         elif mchoice == 4:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 2), daemon=True)
         elif mchoice == 5:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 3), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 3), daemon=True)
         elif mchoice == 6:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 3), daemon=True)
         elif mchoice == 99:
