@@ -420,9 +420,9 @@ def readAll(bus, RAILS, file=False, quiet=False):
                 decodedalt3 = decodeCurrent(alt3)
                 if not quiet:
                     print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W and {decodedalt3}")
-                line += f"{alt},{alt2},{alt3},"
+                line += f"{alt},{alt2},{alt3},{65535}"
             else: # failed
-                line += f"{0xFFFF},{0xFFFF},{0xFFFF},"
+                line += f"{0xFFFF},{0xFFFF},{0xFFFF},{0xFFFF}"
 
     if file:
         with open("me.csv", "a") as f:
@@ -606,6 +606,7 @@ def main():
         for r in selected_rails:
             line += f"[{r['tags']}] {r['name']} Voltage,"
             line += f"[{r['tags']}] {r['name']} Current,"
+            line += f"[{r['tags']}] {r['name']} Temperature,"
             line += f"[{r['tags']}] {r['name']} Power,"
         f.write(line + "\n")
 
