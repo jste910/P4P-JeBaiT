@@ -425,7 +425,7 @@ def readAll(bus, RAILS, file=False, quiet=False):
                 line += f"{0xFFFF},{0xFFFF},{0xFFFF},{0xFFFF},"
 
     if file:
-        with open("me.csv", "a") as f:
+        with open("raw.csv", "a") as f:
             f.write(line + "\n")
 
 def getReadingsBus(busNumber, safe = True, quiet=False):
@@ -601,14 +601,14 @@ def main():
     ITER = 31
     STEP = 0.01
 
-    # open and close me.csv
-    with open("me.csv", "w") as f:
+    # open and close raw.csv
+    with open("raw.csv", "w") as f:
         line = f"Timestamp,"
         for r in selected_rails:
             line += f"[{r['tags']}] {r['name']} Voltage,"
             line += f"[{r['tags']}] {r['name']} Current,"
-            line += f"[{r['tags']}] {r['name']} Temperature,"
             line += f"[{r['tags']}] {r['name']} Power,"
+            line += f"[{r['tags']}] {r['name']} Temperature,"
         f.write(line + "\n")
 
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # set to nominal of 0.85V
@@ -675,9 +675,9 @@ def main():
     print("==============================")
 
 
-    # don't move me.csv yet
+    # don't move raw.csv yet
     try:
-        cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+        cmd ="scp -r ./raw.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
         print(f"Executing command: {cmd}")
 
         child = pexpect.spawn(cmd)

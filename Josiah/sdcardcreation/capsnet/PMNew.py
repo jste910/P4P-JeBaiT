@@ -420,12 +420,12 @@ def readAll(bus, RAILS, file=False, quiet=False):
                 decodedalt3 = decodeCurrent(alt3)
                 if not quiet:
                     print(f"Rail: {rail['name']} | Power: {decodedalt:.2f}V x {decodedalt2:.2f}A = {(decodedalt*decodedalt2):.2f}W and {decodedalt3}")
-                line += f"{alt},{alt2},{alt3},"
+                line += f"{alt},{alt2},{alt3},{65535},"
             else: # failed
-                line += f"{0xFFFF},{0xFFFF},{0xFFFF},"
+                line += f"{0xFFFF},{0xFFFF},{0xFFFF},{0xFFFF},"
 
     if file:
-        with open("me.csv", "a") as f:
+        with open("raw.csv", "a") as f:
             f.write(line + "\n")
 
 def getReadingsBus(busNumber, safe = True, quiet=False):
@@ -464,6 +464,7 @@ def printSensorValues(rail, quiet=False):
                 rst += f"{int(value)},"
             else:
                 rst += f"{0xFFFF},"
+    rst += f"{0xFFFF}," # add a placeholder for the temperature reading
     return rst
 
 """
@@ -600,13 +601,14 @@ def main():
     ITER = 31
     STEP = 0.01
 
-    # open and close me.csv
-    with open("me.csv", "w") as f:
+    # open and close raw.csv
+    with open("raw.csv", "w") as f:
         line = f"Timestamp,"
         for r in selected_rails:
             line += f"[{r['tags']}] {r['name']} Voltage,"
             line += f"[{r['tags']}] {r['name']} Current,"
             line += f"[{r['tags']}] {r['name']} Power,"
+            line += f"[{r['tags']}] {r['name']} Temperature,"
         f.write(line + "\n")
 
     setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, NOMINAL_VOLTAGE) # set to nominal of 0.85V
@@ -624,15 +626,15 @@ def main():
     if modelchoice.isnumeric(): # if it is numeric
         mchoice = int(modelchoice)
         if mchoice == 1:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 1), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 1), daemon=True)
         elif mchoice == 2:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 1), daemon=True)
         elif mchoice == 3:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 2), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 2), daemon=True)
         elif mchoice == 4:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 2), daemon=True)
         elif mchoice == 5:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, ITER, 3), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 3), daemon=True)
         elif mchoice == 6:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 3), daemon=True)
         elif mchoice == 99:
@@ -673,9 +675,9 @@ def main():
     print("==============================")
 
 
-    # don't move me.csv yet
+    # don't move raw.csv yet
     try:
-        cmd ="scp -r ./me.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
+        cmd ="scp -r ./raw.csv beta@192.168.9.1:/home/beta/Desktop/P4P-JeBaiT/Josiah/recovered/"
         print(f"Executing command: {cmd}")
 
         child = pexpect.spawn(cmd)

@@ -1,5 +1,5 @@
-me=open("recovered/me.csv","r")
-g=open("new.csv","w")
+me=open("recovered/raw.csv","r")
+g=open("recovered/processed.csv","w")
 
 def sign_extend(value, bits):
     """Sign-extend an integer encoded using the specified number of bits."""
@@ -40,26 +40,24 @@ counter = 0
 g.write(me.readline())
 
 for line in me:
-    counter+=1
     l=line.split(",")
     k = [l[0]]
-    for i in range(4, (len(l)-1), 3):
-        print(l[i-3], l[i-2], l[i-1], l[i])
+    for i in range(4, (len(l)-1), 4):
         if l[i] == "65535": # we need to fix it
             # l[i-2] = str((decode_vout(int(l[i-2]), exponent=-12)))
-            k.append(str((decode_vout(int(l[i-2]), exponent=-12))))
+            k.append(str((decode_vout(int(l[i-3]), exponent=-12))))
             # l[i-1] = str((decode_linear11(int(l[i-1]))))
+            k.append(str((decode_linear11(int(l[i-2])))))
             k.append(str((decode_linear11(int(l[i-1])))))
-            k.append(str((decode_linear11(int(l[i])))))
             # l[i] = str(float(l[i-1]) * float(l[i-2]))
-            k.append(str(decode_linear11(int(l[i-1])) * decode_vout(int(l[i-2]), exponent=-12)))
-        # safeexit()
+            k.append(str(decode_linear11(int(l[i-2])) * decode_vout(int(l[i-3]), exponent=-12)))
+        else:
+            print("Skipped: ", l[i])
     li = ""
     for e in k:
         li += e + ","
     li = li[:-1]
     g.write(li[:-2]+'\n')
-
 
 
 
