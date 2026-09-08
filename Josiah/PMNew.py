@@ -321,9 +321,9 @@ def runCommand(cmd, cwd):
 
     for line in process.stdout:
         text = line.decode('utf-8').strip()
-        print(f"[{time.monotonic_ns()}] {text}")
+        print(f"{time.monotonic_ns()} {text}")
         with open(filename, "a") as f:
-            f.write(f"[{time.monotonic_ns()}] {text}\n")
+            f.write(f"{time.monotonic_ns()},{text}\n")
     process.wait()  # Wait for the process to finish
 
 
@@ -423,7 +423,7 @@ def readAll(bus, RAILS, file=False, quiet=False):
                 line += f"{alt},{alt2},{alt3},{65535},"
             else: # failed
                 line += f"{0xFFFF},{0xFFFF},{0xFFFF},{0xFFFF},"
-
+    line += str(time.monotonic_ns()) + ","
     if file:
         with open("raw.csv", "a") as f:
             f.write(line + "\n")
@@ -566,11 +566,11 @@ def seperatedLoop(cwd, img, step, iter, version=3):
         global filename
         filename = f"{lengthfolder}/{volt:.2f}V/log.txt"
         with open(filename, "w") as f:
-            f.write(f"ARCHITECTURE=v{version}\n")
-            f.write(f"FREQUENCY={FREQUENCY}MHz\n")
-            f.write(f"TARGET_VOLTAGE={volt:.2f}V\n")
-            f.write(f"WEIGHTS={ALT_WEIGHTS_PATH}\n")
-            f.write(f"NUM_IMAGES={img}\n")
+            f.write(f"{time.monotonic_ns()},ARCHITECTURE=v{version}\n")
+            f.write(f"{time.monotonic_ns()},FREQUENCY={FREQUENCY}MHz\n")
+            f.write(f"{time.monotonic_ns()},TARGET_VOLTAGE={volt:.2f}V\n")
+            f.write(f"{time.monotonic_ns()},WEIGHTS={ALT_WEIGHTS_PATH}\n")
+            f.write(f"{time.monotonic_ns()},NUM_IMAGES={img}\n")
 
         print("==============================")
         setVoltage(BUS_LINE, VOLTAGE_RAIL, DESTINATION_REGISTER, (volt))
@@ -582,7 +582,7 @@ def seperatedLoop(cwd, img, step, iter, version=3):
         print(f'Voltage set to: {volt:.2f}V')
 
         with open(f"{lengthfolder}/{volt:.2f}V/log.txt", "a") as f:
-            f.write(f"STATUS=COMPLETED\n")
+            f.write(f"{time.monotonic_ns()},STATUS=COMPLETED\n")
 
         offload(f"{lengthfolder}/{volt:.2f}V/", file=False) # offload the files to the board
 
@@ -616,11 +616,11 @@ def main():
     print("=======================")
     print("=== Model Selection ===")
     print("1. Digitcaps Version 1 10 Images (TEST)")
-    print("2. Digitcaps Version 1 1000 Images")
+    print("2. Digitcaps Version 1 100 Images")
     print("3. Digitcaps Version 2 10 Images (TEST)")
-    print("4. Digitcaps Version 2 1000 Images")
+    print("4. Digitcaps Version 2 100 Images")
     print("5. Digitcaps Version 3 10 Images (TEST)")
-    print("6. Digitcaps Version 3 1000 Images")
+    print("6. Digitcaps Version 3 100 Images")
     print("=======================")
     modelchoice = input(f"Please enter your choice: ")
     if modelchoice.isnumeric(): # if it is numeric
@@ -628,15 +628,15 @@ def main():
         if mchoice == 1:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 1), daemon=True)
         elif mchoice == 2:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 1), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, 1), daemon=True)
         elif mchoice == 3:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 2), daemon=True)
         elif mchoice == 4:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 2), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, 2), daemon=True)
         elif mchoice == 5:
             shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 10, STEP, 5, 3), daemon=True)
         elif mchoice == 6:
-            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 1000, STEP, ITER, 3), daemon=True)
+            shellThread = threading.Thread(target=seperatedLoop, args=(cwd, 100, STEP, ITER, 3), daemon=True)
         elif mchoice == 99:
             exit()
         else:
